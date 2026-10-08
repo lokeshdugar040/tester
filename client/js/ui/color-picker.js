@@ -45,6 +45,11 @@
     var swatch = el('span.rb-cp-swatch'); var trigText = el('span.rb-cp-hex-text');
     var trigger = el('button.rb-cp-trigger', { type: 'button', title: opts.title || 'Pick a color', onclick: toggle }, [swatch, trigText]);
     var root = el('div.rb-cp', null, [trigger, pop]);
+    // True while a pointer drag drives the color (SV / hue / alpha). While it
+    // lasts, paint() may overwrite the hex field even if it holds focus: the
+    // pointer is down, so the user cannot be typing, and the field must keep
+    // its live readout.
+    var dragPainting = false;
 
     function rgb() { return hsvToRgb(state.h, state.s, state.v); }
     function hex() { var c = rgb(); return rgbToHex(c[0], c[1], c[2]); }
@@ -57,22 +62,51 @@
       svThumb.style.left = (state.s * 100) + '%'; svThumb.style.top = ((1 - state.v) * 100) + '%'; svThumb.style.background = hxv;
       hueThumb.style.left = ((state.h / 360) * 100) + '%';
       if (alphaEl) { alphaEl.style.backgroundImage = 'linear-gradient(to right, rgba(0,0,0,0), ' + hxv + ')'; alphaThumb.style.left = (state.a * 100) + '%'; }
-      if (document.activeElement !== hexInput) hexInput.value = hxv;
+      // Never clobber the field while the user is editing it (caret + partial
+      // text must survive), EXCEPT while a pointer drag is repainting: during
+      // a drag no keystrokes can arrive, and the field must keep its live hex.
+      if (dragPainting || document.activeElement !== hexInput) hexInput.value = hxv;
     }
     function dragSV(e) { var r = sv.getBoundingClientRect(); state.s = clamp((e.clientX - r.left) / r.width, 0, 1); state.v = clamp(1 - (e.clientY - r.top) / r.height, 0, 1); paint(); emit(); }
     function dragHue(e) { var r = hue.getBoundingClientRect(); state.h = clamp((e.clientX - r.left) / r.width, 0, 1) * 360; paint(); emit(); }
     function dragAlpha(e) { var r = alphaEl.getBoundingClientRect(); state.a = clamp((e.clientX - r.left) / r.width, 0, 1); paint(); emit(); }
     function bindDrag(elm, handler) {
       on(elm, 'pointerdown', function (e) {
-        e.preventDefault(); handler(e);
+        e.preventDefault(); dragPainting = true; handler(e);
         var mv = function (ev) { if (ev.buttons === 0) return up(); handler(ev); }; // lost mouseup outside the panel (CEP)
-        var up = function () { document.removeEventListener('pointermove', mv, true); document.removeEventListener('pointerup', up, true); pushRecent(hex()); };
+        var up = function () { dragPainting = false; document.removeEventListener('pointermove', mv, true); document.removeEventListener('pointerup', up, true); pushRecent(hex()); };
         document.addEventListener('pointermove', mv, true); document.addEventListener('pointerup', up, true);
       });
     }
     bindDrag(sv, dragSV); bindDrag(hue, dragHue); if (alphaEl) bindDrag(alphaEl, dragAlpha);
     on(hexInput, 'input', function () { if (setFromHex(hexInput.value)) { paint(); emit(); } });
     on(hexInput, 'change', function () { pushRecent(hex()); });
+
+    // ---- CEP keyboard focus guard -------------------------------------------
+    // A CEP panel only keeps the keyboard while a text input (or dropdown) is
+    // the focused element; otherwise every key is routed to the host app
+    // (After Effects), which runs its own shortcuts instead. Some CEP/CEF
+    // builds additionally fail to move DOM focus when a click lands inside a
+    // popup: the field looks active but the trigger button stays focused, so
+    // typed characters reach AE and Enter/Space re-activate the trigger, whose
+    // click toggles the popup closed mid-edit. Force DOM focus onto the hex
+    // field for any press inside the popup that does not land on a naturally
+    // focusable control (the field and the recent-swatch buttons keep native
+    // focus), so keys always stay in the panel. Both event families are bound
+    // because CEF can drop pointer events on some elements while still firing
+    // mouse events (the same quirk the curve editor binds around).
+    function focusHex() {
+      if (document.activeElement === hexInput) return;
+      try { hexInput.focus({ preventScroll: true }); } catch (err) { hexInput.focus(); }
+    }
+    function onPopDown(e) {
+      var t = e.target;
+      if (t === hexInput) { focusHex(); return; }
+      if (t && typeof t.focus === 'function' && /^(button|input|select|textarea)$/i.test(String(t.tagName))) return;
+      focusHex();
+    }
+    on(pop, 'pointerdown', onPopDown);
+    on(pop, 'mousedown', onPopDown);
 
     var skey = opts.storageKey || 'colorpicker-recents';
     function recents() { try { return (R.disk.read(skey, { items: [] }).items) || []; } catch (e) { return []; } }
@@ -83,14 +117,18 @@
     var open = false;
     function toggle() { open = !open; pop.style.display = open ? '' : 'none'; if (open) paint(); }
     function onDocDown(e) { if (open && !root.contains(e.target)) { open = false; pop.style.display = 'none'; } }
-    document.addEventListener('pointerdown', onDocDown, false);
+    // Track the unsubscribe so destroy() can actually remove the listener —
+    // removeEventListener only matches when the capture flag is identical to
+    // the one addEventListener used (a mismatched flag silently leaks the
+    // document-level handler for the life of the panel).
+    var offDocDown = on(document, 'pointerdown', onDocDown, false);
 
     paint();
     return {
       el: root,
       get: function () { var c = rgb(); return { r: c[0] / 255, g: c[1] / 255, b: c[2] / 255, hex: hex(), a: state.a }; },
       set: function (v) { if (typeof v === 'string') setFromHex(v); else if (v && v.hex) { setFromHex(v.hex); if (v.a != null) state.a = v.a; } paint(); },
-      destroy: function () { document.removeEventListener('pointerdown', onDocDown, true); }
+      destroy: function () { offDocDown(); }
     };
   }
 

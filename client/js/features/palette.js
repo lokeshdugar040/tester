@@ -306,7 +306,9 @@
         else if (nInvalid) { hint.classList.add('is-error'); hint.textContent = 'Fix ' + nInvalid + ' invalid color' + (nInvalid === 1 ? '' : 's'); }
         else hint.textContent = cols.length + ' colors';
         if (saveBtn) saveBtn.disabled = !((nameInput && nameInput.value.trim()) && cols.length);
-    function makeRow(hex) {
+      }
+
+      function makeRow(hex) {
   var r = { ci: null, hi: null, row: null };
 
   var picker = R.ui.colorPicker({
