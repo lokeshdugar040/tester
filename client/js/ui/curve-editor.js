@@ -119,6 +119,16 @@
     function render() {
       if (!dragging) measure(); // keep the pixel space fixed during a drag
       view = frozenView || computeView(curve);
+      // Rebuilding the SVG below destroys the focused handle node, which drops
+      // keyboard focus to <body> — and inside CEP a non-input focus hands every
+      // following key to the host app (AE runs its shortcuts instead). Remember
+      // which handle had focus and re-focus its rebuilt twin at the end of this
+      // render, so arrow-key nudging survives the rebuild.
+      var refocusKey = null;
+      var ae = document.activeElement;
+      if (ae && ae.getAttribute && ae.getAttribute('data-handle') && svgEl.contains(ae)) {
+        refocusKey = ae.getAttribute('data-handle');
+      }
       R.dom.clear(svgEl);
 
       // Grid: thirds.
@@ -200,6 +210,19 @@
         var dotX = left() + clamp01(prog) * (right() - left());
         swatchDot = svg('circle', { cx: dotX, cy: trackY, r: 4, class: 'rb-swatch-dot' });
         svgEl.appendChild(swatchDot);
+      }
+
+      // Restore keyboard focus onto the rebuilt handle (see note at the top of
+      // this function). preventScroll so the re-focus never yanks the view.
+      // The selector must match the visible .rb-handle circle: both it and the
+      // invisible .rb-handle-hit target carry data-handle, but only the visible
+      // one is focusable (tabindex), so focusing the hit target would be a
+      // silent no-op and the focus would still be lost.
+      if (refocusKey) {
+        var nf = svgEl.querySelector('circle.rb-handle[data-handle="' + refocusKey + '"]');
+        if (nf) {
+          try { nf.focus({ preventScroll: true }); } catch (err) { try { nf.focus(); } catch (err2) { /* not focusable in this engine */ } }
+        }
       }
     }
 
