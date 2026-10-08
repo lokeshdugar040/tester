@@ -332,15 +332,15 @@
 
   r.hi = hi;
 
-  hi.addEventListener('input', function () {
-    if (isHex(hi.value)) {
-      hi.classList.remove('is-invalid');
-      picker.set(normHex(hi.value));
-    } else {
-      hi.classList.add('is-invalid');
-    }
-    refresh();
-  });
+        hi.addEventListener('input', function () {
+          if (isHex(hi.value)) {
+            hi.classList.remove('is-invalid');
+            picker.set(normHex(hi.value), { user: true }); // typed text: a user edit
+          } else {
+            hi.classList.add('is-invalid');
+          }
+          refresh();
+        });
 
   hi.addEventListener('keydown', function (e) {
     if (
@@ -382,7 +382,10 @@
         function fill(text) {
           var hs = ('' + (text || '')).split(/[\s,]+/).filter(isHex);
           if (!hs.length) { ctx.toast('No hex colors on the clipboard', { kind: 'info' }); return; }
-          rows.slice().forEach(function (r) { rowsHost.removeChild(r.row); });
+          // Rows are rebuilt: destroy their pickers first — each one holds
+      // document-level listeners that would otherwise leak with the detached
+      // DOM node.
+      rows.slice().forEach(function (r) { rowsHost.removeChild(r.row); if (r.ci && r.ci.destroy) r.ci.destroy(); });
           rows.length = 0;
           hs.slice(0, 10).forEach(function (h) { addRow(h); });
         }
@@ -413,7 +416,16 @@
       var isEdit = existing != null && index != null;
       var cancelBtn = el('button.rb-btn.is-ghost', { onclick: function () { dlg.close('close'); } }, ['Cancel']);
       saveBtn = el('button.rb-btn.is-primary', { onclick: doSave }, [isEdit ? 'Save' : 'Create']);
-      var dlg = R.ui.modal({ title: isEdit ? 'Edit palette' : 'New palette', width: 360, className: 'rb-modal-save', body: body, footer: [cancelBtn, saveBtn], initialFocus: nameInput });
+      var dlg = R.ui.modal({
+      title: isEdit ? 'Edit palette' : 'New palette', width: 360, className: 'rb-modal-save',
+      body: body, footer: [cancelBtn, saveBtn], initialFocus: nameInput,
+      // The dialog is the picker rows' only home: when it closes, destroy the
+      // row pickers so their document-level listeners do not accumulate.
+      onClose: function () {
+        rows.slice().forEach(function (r) { if (r.ci && r.ci.destroy) r.ci.destroy(); });
+        rows.length = 0;
+      }
+    });
 
       function doSave() {
         var nm = nameInput.value.trim();

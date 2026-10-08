@@ -202,17 +202,20 @@
 
     // Sliders push into the picker; the picker pushes into the sliders (via
     // setFromHex). picker.set() never re-emits, so the two cannot loop.
-    function syncPicker() { picker.set(currentHex()); }
+    // `user` marks slider-driven syncs (a user edit: they apply even while the
+    // hex field holds uncommitted text); without it the call counts as an
+    // external sync, which the picker ignores while the user is editing.
+    function syncPicker(user) { picker.set(currentHex(), { user: !!user }); }
 
     var hueSlider = ui.slider({ label: 'Hue', min: 0, max: 360, step: 1, value: hue,
       format: function (v) { return Math.round(v) + '°'; },
-      onInput: function (v) { hue = v; updatePreview(); syncPicker(); } });
+      onInput: function (v) { hue = v; updatePreview(); syncPicker(true); } });
     var satSlider = ui.slider({ label: 'Saturation', min: 0, max: 100, step: 1, value: saturation,
       format: function (v) { return Math.round(v) + '%'; },
-      onInput: function (v) { saturation = v; updatePreview(); syncPicker(); } });
+      onInput: function (v) { saturation = v; updatePreview(); syncPicker(true); } });
     var lightSlider = ui.slider({ label: 'Lightness', min: 0, max: 100, step: 1, value: lightness,
       format: function (v) { return Math.round(v) + '%'; },
-      onInput: function (v) { lightness = v; updatePreview(); syncPicker(); } });
+      onInput: function (v) { lightness = v; updatePreview(); syncPicker(true); } });
 
     var targetCtl = ui.segmented([
       { value: 'fill', label: 'Fill', title: 'Recolor fills' },
@@ -287,13 +290,13 @@
       ctx.invoke('color.read', {})
         .then(function (res) {
           if (!res || !res.found) { ctx.toast('Select a layer with a colour to read', { kind: 'error' }); return; }
-          var hsl = rgbToHsl(res.rgb);
-          hue = hsl[0]; saturation = hsl[1]; lightness = hsl[2];
-          hueSlider.set(hue); satSlider.set(saturation); lightSlider.set(lightness);
-          if (res.target) { target = res.target; targetCtl.set(res.target); }
-          updatePreview();
-          syncPicker();
-          ctx.toast('Read colour from ' + (res.layerName || 'layer'), { kind: 'info' });
+      var hsl = rgbToHsl(res.rgb);
+      hue = hsl[0]; saturation = hsl[1]; lightness = hsl[2];
+      hueSlider.set(hue); satSlider.set(saturation); lightSlider.set(lightness);
+      if (res.target) { target = res.target; targetCtl.set(res.target); }
+      updatePreview();
+      syncPicker(true); // explicit Read: apply even over an uncommitted edit
+      ctx.toast('Read colour from ' + (res.layerName || 'layer'), { kind: 'info' });
         })
         .catch(function (err) { ctx.toast(err.message || 'Could not read colour', { kind: 'error' }); });
     }
@@ -317,6 +320,9 @@
     // Selecting a colored layer loads its current fill colour into the sliders.
     function loadColor(res) {
       if (!res || !res.found) return;
+      // An AE read must never clobber an in-progress picker edit (typed hex,
+      // live drag): the user's edit wins until it commits or is abandoned.
+      if (picker.editing && picker.editing()) return;
       var hsl = rgbToHsl(res.rgb);
       hue = hsl[0]; saturation = hsl[1]; lightness = hsl[2];
       hueSlider.set(hue); satSlider.set(saturation); lightSlider.set(lightness);

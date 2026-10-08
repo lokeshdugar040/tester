@@ -93,7 +93,7 @@
     function setHex(hex) {
       activeHex = hex;
       rgb = hexToRgb(hex);
-      picker.set(hex);
+      picker.set(hex, { user: true }); // quick swatch: a user edit, applies over field text
       renderPreview();
     }
 
@@ -159,9 +159,9 @@
     function doRead() {
       ctx.invoke('stroke.read', {})
         .then(function (res) {
-          if (!res || !res.found) { ctx.toast('Select a shape layer with a stroke to read', { kind: 'error' }); return; }
-          applyState(readState(res));
-          ctx.toast('Read stroke from ' + (res.layerName || 'layer'), { kind: 'info' });
+      if (!res || !res.found) { ctx.toast('Select a shape layer with a stroke to read', { kind: 'error' }); return; }
+      applyState(readState(res), true); // explicit Read: apply even over an uncommitted edit
+      ctx.toast('Read stroke from ' + (res.layerName || 'layer'), { kind: 'info' });
         })
         .catch(function (err) { ctx.toast(err.message || 'Could not read stroke', { kind: 'error' }); });
     }
@@ -203,10 +203,14 @@
     function getState() {
       return { width: width, hex: activeHex, cap: cap, dashed: dashed, dash: dash, gap: gap };
     }
-    function applyState(s) {
+    function applyState(s, user) {
       if (!s) return;
       if (s.width != null) { width = s.width; widthField.set(s.width); }
-      if (s.hex != null) { activeHex = s.hex; rgb = hexToRgb(s.hex); picker.set(s.hex); }
+      // An AE read must never clobber an in-progress picker edit (typed hex,
+      // live drag); an explicit user action (Read button) always applies.
+      if (s.hex != null && (user || !(picker.editing && picker.editing()))) {
+        activeHex = s.hex; rgb = hexToRgb(s.hex); picker.set(s.hex, { user: true });
+      }
       if (s.cap != null) { cap = s.cap === 'round' ? 'round' : 'butt'; capCtl.set(cap); }
       if (s.dashed != null) { dashed = !!s.dashed; dashTog.set(dashed); }
       if (s.dash != null) { dash = s.dash; dashField.set(s.dash); }

@@ -574,6 +574,10 @@
   function setView(v) {
     var app = document.getElementById('rb-app');
     if (!app) return;
+    // No color-picker popup may outlive a view change: switching tools or
+    // going Home/Browse with a popup open used to leave a stale `open` flag
+    // (and a stale popup) that came back still-open when the tool reopened.
+    if (R.ui.closeColorPickers) R.ui.closeColorPickers();
     app.classList.toggle('is-view-home', v === 'home');
     app.classList.toggle('is-view-browse', v === 'browse');
     app.classList.toggle('is-view-detail', v === 'detail');
