@@ -1124,6 +1124,54 @@
     });
   }
 
+  // Developer-only live probe of the After Effects command resolver. Refuses to
+  // run unless developer diagnostics are on. Call from the panel devtools console:
+  //   Rebound.shortcutDevProbe.resolve()
+  //   Rebound.shortcutDevProbe.dispatch('ae-undo')
+  // Only allowlisted command action IDs reach the host. No pad IDs, labels,
+  // chords, or raw command numbers.
+  function requireDevProbe() {
+    if (!developmentTraceEnabled()) {
+      throw new Error('The shortcut command probe requires developer diagnostics.');
+    }
+    if (!R.bridge || typeof R.bridge.invoke !== 'function') {
+      throw new Error('The After Effects bridge is not available.');
+    }
+  }
+
+  R.shortcutDevProbe = {
+    resolve: function () {
+      requireDevProbe();
+      return R.bridge.invoke('aeShortcut.devProbe', { mode: 'resolve', devMode: true });
+    },
+    dispatch: function (commandActionId) {
+      requireDevProbe();
+      if (typeof commandActionId !== 'string' || !commandActionId ||
+          /^(?:pad:|sample-)/.test(commandActionId)) {
+        return Promise.reject(new Error('Not a probe-eligible After Effects command ID.'));
+      }
+      var requestId = createRequestId();
+      var started = Date.now();
+      return R.bridge.invoke('aeShortcut.devProbe', {
+        mode: 'dispatch', devMode: true, commandActionId: commandActionId, requestId: requestId
+      }).then(function (result) {
+        var record = {
+          requestId: requestId,
+          commandActionId: commandActionId,
+          ok: !!(result && result.ok),
+          commandId: result && result.commandId,
+          commandIdSource: result && result.commandIdSource,
+          verified: result && result.verified,
+          error: result && result.error || '',
+          elapsedMs: Date.now() - started,
+          aeVersion: result && result.aeVersion
+        };
+        if (window.console && window.console.info) window.console.info('[Rebound probe]', record);
+        return record;
+      });
+    }
+  };
+
   R.actionRouter = {
     triggerAction: triggerAction,
     executeAction: executeAction,

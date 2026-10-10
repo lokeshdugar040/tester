@@ -466,6 +466,79 @@
     return { functionName: functionName };
   }, 'Rebound: Custom AE Function');
 
+  // Developer-only live command probe. Reached only when the client sends
+  // devMode: true, which it does only with Rebound developer diagnostics on.
+  // It iterates the same allowlist as production, resolves IDs with the same
+  // app.findMenuCommandId resolver, and dispatches through executeRegisteredAction.
+  // It never accepts a pad ID, label, key chord, or raw command number.
+  var PROBE_REQUEST_ID = /^shortcut-[0-9]+-[A-Za-z0-9-]+$/;
+
+  function resolveCommandLabels(labels) {
+    for (var j = 0; j < labels.length; j++) {
+      var id = app.findMenuCommandId(labels[j]);
+      if (id) return { commandId: id, matchedLabel: labels[j] };
+    }
+    return { commandId: 0, matchedLabel: null };
+  }
+
+  R.register('aeShortcut.devProbe', function (args) {
+    if (!args || args.devMode !== true) {
+      throw new Error('The shortcut command probe is available only in developer mode.');
+    }
+    var i, ids = [], key;
+    for (key in COMMANDS) {
+      if (COMMANDS.hasOwnProperty(key)) ids.push(key);
+    }
+    ids.sort();
+
+    if (args.mode === 'resolve') {
+      var rows = [];
+      for (i = 0; i < ids.length; i++) {
+        var hit = resolveCommandLabels(COMMANDS[ids[i]]);
+        rows.push({
+          commandActionId: ids[i],
+          labelsTried: COMMANDS[ids[i]].slice(),
+          matchedLabel: hit.matchedLabel,
+          commandId: hit.commandId,
+          isPositiveInteger: typeof hit.commandId === 'number' &&
+            hit.commandId > 0 && Math.floor(hit.commandId) === hit.commandId,
+          registrySource: 'app.findMenuCommandId'
+        });
+      }
+      return {
+        aeVersion: String(app.version || ''),
+        locale: typeof app.isoLanguage === 'string' ? app.isoLanguage : '',
+        osName: $.os,
+        rows: rows
+      };
+    }
+
+    if (args.mode === 'dispatch') {
+      var commandActionId = args.commandActionId;
+      if (typeof commandActionId !== 'string' || !COMMANDS.hasOwnProperty(commandActionId)) {
+        throw new Error('Not an allowlisted After Effects command: ' + String(commandActionId));
+      }
+      if (typeof args.requestId !== 'string' || !PROBE_REQUEST_ID.test(args.requestId)) {
+        throw new Error('The probe request ID is missing or malformed.');
+      }
+      var started = new Date().getTime();
+      var outcome;
+      try {
+        outcome = executeRegisteredAction({ id: commandActionId, requestId: args.requestId });
+        outcome.ok = true;
+      } catch (error) {
+        // Returned to the caller, which logs it. Nothing is swallowed.
+        outcome = { ok: false, error: String(error && error.message ? error.message : error) };
+        outcome.requestId = args.requestId;
+        outcome.commandActionId = commandActionId;
+      }
+      outcome.elapsedMs = new Date().getTime() - started;
+      return outcome;
+    }
+
+    throw new Error('Unknown probe mode.');
+  }, 'Rebound: Developer Shortcut Probe');
+
   function readFile(file) {
     if (!file.exists) throw new Error('After Effects shortcut preference file was not found: ' + file.fsName);
     file.encoding = 'UTF-8';
