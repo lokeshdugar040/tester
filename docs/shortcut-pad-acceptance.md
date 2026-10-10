@@ -64,7 +64,7 @@ Tests       595 passed (595)
 npx eslint (changed files): clean
 ```
 
-Relevant suites: `shortcut-pad-reliability` 17/17, `shortcut-pad-widget` 13/13, `shortcut-platform` 15/15, `shortcut-pads` 17/17, `ae-shortcuts` 28/28.
+Relevant suites: `shortcut-pad-reliability` 17/17, `shortcut-pad-widget` 13/13, `shortcut-platform` 15/15, `shortcut-pads` 17/17, `ae-shortcuts` 16/16.
 
 ## 7. Changed files
 
