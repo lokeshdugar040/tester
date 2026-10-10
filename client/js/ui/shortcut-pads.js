@@ -499,8 +499,8 @@
     if (cachedPads !== null) return cachedPads.map(clonePin);
     var saved = R.disk.read(KEY, null);
     if (saved == null) {
-      var initial = defaultPins();
-      if (initial.length) return write(initial).map(clonePin);
+      // No auto-seeding: a new user starts with an empty pad and an explicit
+      // "Add your first shortcut" prompt. Nothing is written until they add one.
       cachedPads = [];
       return [];
     }
@@ -509,7 +509,13 @@
     }
     var pinIdMigrations = Object.create(null);
     var pads = normalizeAll(saved, pinIdMigrations);
-    if (JSON.stringify(stableList(pads)) !== JSON.stringify(saved)) {
+    // Legacy records are only rewritten once the AE registry can validate them.
+    // Before that, every record is "unresolved", and persisting that would
+    // silently rewrite user pins.
+    var registryLoaded = !R.afterEffectsShortcuts ||
+      typeof R.afterEffectsShortcuts.keymapLoaded !== 'function' ||
+      R.afterEffectsShortcuts.keymapLoaded() === true;
+    if (registryLoaded && JSON.stringify(stableList(pads)) !== JSON.stringify(saved)) {
       var migrated = write(pads);
       if (R.globalHotkeys && R.globalHotkeys.migratePinBindings &&
           Object.keys(pinIdMigrations).length) {

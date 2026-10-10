@@ -101,34 +101,28 @@ function createPads(initial = null, options = {}) {
   return { pads: R.shortcutPads, readStored: () => stored, atomicWrites };
 }
 
-describe('Home Shortcut Pad persistence', () => {
-  it('seeds at most eight safe active-map actions with only stable fields', () => {
-    const { pads, readStored } = createPads();
 
-    expect(pads.all()).toHaveLength(8);
-    expect(pads.all().map((pad) => pad.label)).toEqual([
-      'Undo', 'Redo', 'Save Project', 'Open Project',
-      'Close Project', 'Select All', 'Deselect All', 'Add Marker'
-    ]);
-    expect(pads.all().map((pad) => pad.pinnedSlot)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
-    expect(readStored()[0]).toMatchObject({
-      pinId: pads.all()[0].id,
-      displayName: 'Undo',
-      action: {
-        type: 'ae-command',
-        actionId: 'ae.undo',
-        commandName: 'Undo',
-        menuPath: 'Edit \u203a Undo'
-      },
-      enabled: true,
-      status: 'ready'
-    });
-    expect(readStored()[0]).not.toHaveProperty('activeChord');
-    expect(readStored()[0]).not.toHaveProperty('context');
+// Explicit fixture: the first eight verified pins, created through the public
+// add() API (the production store no longer seeds defaults on its own).
+function createSeededPads(initial = null, options = {}) {
+  const made = createPads(initial, options);
+  actionList.slice(0, 8).forEach((action, index) => {
+    made.pads.add(action.label, { actionId: action.id, pinnedSlot: index });
+  });
+  return made;
+}
+
+describe('Home Shortcut Pad persistence', () => {
+  it('starts empty and never auto-seeds default or sample pins', () => {
+    const { pads, readStored, atomicWrites } = createPads();
+
+    expect(pads.all()).toEqual([]);
+    expect(readStored()).toBeNull();
+    expect(atomicWrites).toEqual([]);
   });
 
   it('adds new shortcuts into the first empty slot and keeps library-only items unpinned', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
 
     expect(pads.firstEmptySlot()).toBe(8);
     const pinned = pads.add('Preview', { actionId: 'ae.preview' });
@@ -152,7 +146,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('replaces a chosen pin without deleting the previous shortcut', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
     const original = pads.atSlot(0);
     const candidate = pads.add('Preview', {
       actionId: 'ae.preview',
@@ -170,7 +164,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('clears a pin without treating its AE display chord as a Rebound binding', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
     const pinned = pads.add('Custom Preview', {
       actionId: 'ae.preview',
       hotkey: 'Ctrl+Alt+P'
@@ -197,7 +191,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('swaps pins when reordering within the 6 × 6 pad', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
     const first = pads.atSlot(0);
     const second = pads.atSlot(1);
 
@@ -208,7 +202,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('resets only pins and retains saved AE commands in the library', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
     const custom = pads.add('My Preview', {
       actionId: 'ae.preview',
       hotkey: 'Ctrl+Alt+D',
@@ -386,7 +380,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('uses only the action-matched AE chord and supports removal', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
     const custom = pads.add('Custom', {
       actionId: 'ae.undo',
       hotkey: 'Ctrl+Alt+Numpad4',
@@ -402,7 +396,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('does not persist a custom physical key binding', () => {
-    const { pads, readStored } = createPads();
+    const { pads, readStored } = createSeededPads();
     const custom = pads.add('Win Backspace', {
       actionId: 'ae.undo',
       hotkey: {
@@ -423,7 +417,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('updates pins atomically and keeps the canonical record readable', () => {
-    const { pads, readStored, atomicWrites } = createPads();
+    const { pads, readStored, atomicWrites } = createSeededPads();
     const original = pads.atSlot(0);
 
     expect(pads.update(original.id, { label: 'My Undo' })).toBe(true);
@@ -440,7 +434,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('applies whole-grid edits as one validated atomic storage transaction', () => {
-    const { pads, readStored, atomicWrites } = createPads();
+    const { pads, readStored, atomicWrites } = createSeededPads();
     const changed = pads.all().map((pad) => Object.assign({}, pad));
     changed[0].pinnedSlot = 2;
     changed[2].pinnedSlot = 0;
@@ -456,7 +450,7 @@ describe('Home Shortcut Pad persistence', () => {
   });
 
   it('fixes the grid at 36 slots and reports invalid inputs and write failures', () => {
-    const { pads } = createPads();
+    const { pads } = createSeededPads();
 
     expect(pads.slotCount()).toBe(36);
     expect(pads.columns()).toBe(6);
