@@ -95,6 +95,17 @@
         result: 'Layer count ' + before.numLayers + ' -> ' + actual + '; expected ' + expected + '.'
       };
     }
+    if (actionId === 'ae-undo' || actionId === 'ae-redo') {
+      // History commands are verified only by a measurable layer-count change.
+      // Without an active comp there is nothing to measure, so this is not verified.
+      var historyComp = before.comp;
+      var layersAfter = historyComp ? historyComp.numLayers : -1;
+      return {
+        verified: !!historyComp && layersAfter !== before.numLayers,
+        result: 'Layer count ' + (before.numLayers == null ? 'unavailable' : before.numLayers) +
+          ' -> ' + layersAfter + '.'
+      };
+    }
     if (actionId === 'ae-new-null') {
       var nullCount = 0;
       if (comp) {

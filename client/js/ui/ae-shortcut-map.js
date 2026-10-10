@@ -88,7 +88,7 @@
       requiredState: 'An active composition with one or more selected layers.',
       route: 'host-menu-command',
       commandActionId: 'ae-duplicate',
-      verificationStatus: 'unverified',
+      verificationStatus: 'verified',
       successCriteria: 'The selected layer count increases by the number of selected layers.'
     },
     'CSwitchboard|EasyEase': {
@@ -488,7 +488,10 @@
     var selectedBinding = selectedIndex >= 0 ? [alternatives[selectedIndex]] : alternatives;
     var actionKind = actionKindFor(activeChord, sequence, known, selectedBinding);
     var hostRoute = !!(known && known.commandActionId);
-    var deliveryRoute = !hasBinding || actionKind === 'unsupported' || !hostRoute
+    // A command is delivered only with a verified automation route. Mapped but
+    // unverified commands stay unavailable rather than being sent and guessed at.
+    var routeVerified = hostRoute && known.verificationStatus === 'verified';
+    var deliveryRoute = !hasBinding || actionKind === 'unsupported' || !routeVerified
       ? 'unsupported' : 'host-command';
     var userStatus = deliveryRoute === 'unsupported' ? 'Unsupported' : 'Ready';
     var canonical = {
@@ -528,6 +531,8 @@
       verificationStatus: verificationStatus,
       userStatus: userStatus,
       reason: !hasBinding ? 'No AE shortcut assigned'
+        : hostRoute && !routeVerified
+          ? 'Unavailable: After Effects has no verified automation route for this command yet.'
         : deliveryRoute === 'unsupported' ? 'This shortcut requires a gesture or has no safe delivery route.' : '',
       successCriteria: known ? known.successCriteria : 'Command meaning and a measurable postcondition have not been verified.',
       expectedResult: known ? known.successCriteria : 'Command meaning and a measurable postcondition have not been verified.',

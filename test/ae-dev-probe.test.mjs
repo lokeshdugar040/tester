@@ -117,6 +117,57 @@ describe('host developer probe', () => {
   });
 });
 
+describe('host history verification', () => {
+  // Undo/Redo are verified only by a measurable layer-count change on an active comp.
+  function loadWithComp(layerCounts, options = {}) {
+    const handlers = {};
+    const executed = [];
+    const CompItem = function () {};
+    const comp = Object.create(CompItem.prototype);
+    let step = 0;
+    Object.defineProperty(comp, 'numLayers', {
+      get() { return layerCounts[Math.min(step, layerCounts.length - 1)]; }
+    });
+    const dollar = {
+      __rebound: { register(name, fn) { handlers[name] = fn; } },
+      global: {}, os: 'Windows', getenv() { return ''; }
+    };
+    const app = {
+      version: '26.5x89', isoLanguage: 'en_US',
+      project: options.noComp ? { activeItem: null } : { activeItem: comp },
+      findMenuCommandId(label) { return MENU[label] || 0; },
+      executeCommand(id) { executed.push(id); step++; }
+    };
+    new Function('$', 'app', 'CompItem', 'Property', 'File', hostSource)(
+      dollar, app, CompItem, undefined, undefined);
+    return { probe: handlers['aeShortcut.devProbe'], executed };
+  }
+  const dispatch = (probe, id) => probe({ mode: 'dispatch', devMode: true, commandActionId: id,
+    requestId: 'shortcut-1760000000000-history-' + id });
+
+  it('reports Undo as not verified when the layer count does not change', () => {
+    const { probe } = loadWithComp([6, 6]);
+    const result = dispatch(probe, 'ae-undo');
+    expect(result.ok).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(result.result).toBe('Layer count 6 -> 6.');
+  });
+
+  it('reports Undo as verified only when the layer count changes', () => {
+    const { probe } = loadWithComp([6, 5]);
+    const result = dispatch(probe, 'ae-undo');
+    expect(result.verified).toBe(true);
+    expect(result.result).toBe('Layer count 6 -> 5.');
+  });
+
+  it('never reports Undo verified without an active composition', () => {
+    const { probe } = loadWithComp([0], { noComp: true });
+    const result = dispatch(probe, 'ae-undo');
+    expect(result.verified).toBe(false);
+    expect(result.result).toBe('Layer count unavailable -> -1.');
+  });
+});
+
 describe('client developer probe hook', () => {
   function loadClient(devEnabled) {
     const calls = [];

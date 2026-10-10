@@ -93,6 +93,30 @@ describe('After Effects shortcut map parser', () => {
     expect(categories.categoryForContext('UnknownContext')).toBe('Other Shortcuts');
   });
 
+  it('delivers only verified commands: Duplicate is available, Undo and Redo are unavailable with a reason', () => {
+    const window = { Rebound: {} };
+    window.Rebound.globalHotkeys = { cleanPadChord(chord) { return chord; } };
+    new Function('window', source)(window);
+    const map = window.Rebound.aeShortcutMap;
+    const undo = map.canonicalRecord({
+      context: 'CSwitchboard', contextLabel: 'Application', commandId: 'Undo', shortcuts: ['Ctrl+Z']
+    });
+    const redo = map.canonicalRecord({
+      context: 'CSwitchboard', contextLabel: 'Application', commandId: 'Redo', shortcuts: ['Ctrl+Shift+Z']
+    });
+    const duplicate = map.canonicalRecord({
+      context: 'CSwitchboard', contextLabel: 'Application', commandId: 'Duplicate', shortcuts: ['Ctrl+D']
+    });
+
+    expect(duplicate).toMatchObject({ route: 'host-command', deliveryRoute: 'host-command',
+      verificationStatus: 'verified', userStatus: 'Ready' });
+    for (const record of [undo, redo]) {
+      expect(record).toMatchObject({ route: 'unsupported', deliveryRoute: 'unsupported',
+        verificationStatus: 'unverified', userStatus: 'Unsupported' });
+      expect(record.reason).toMatch(/no verified automation route/);
+    }
+  });
+
   it('builds canonical records without inventing semantics for unknown commands', () => {
     const window = { Rebound: {} };
     window.Rebound.globalHotkeys = {
@@ -129,7 +153,7 @@ describe('After Effects shortcut map parser', () => {
       bindingAlternatives: ['Ctrl+D', 'PadDecimal'],
       actionKind: 'ae-command',
       route: 'host-command',
-      verificationStatus: 'unverified',
+      verificationStatus: 'verified',
       userStatus: 'Ready'
     });
     expect(unknown).toMatchObject({
