@@ -46,14 +46,16 @@ Columns required by the acceptance brief. "Registry source" should read
 
 | Display name | Menu path | Real command ID | Registry source | Verified in live AE | Test status |
 |---|---|---:|---|---|---|
-| Undo | Edit › Undo | _run probe_ | _run probe_ | no | not run |
-| Redo | Edit › Redo | _run probe_ | _run probe_ | no | not run |
-| Duplicate | Edit › Duplicate | _run probe_ | _run probe_ | no | not run |
+| Undo | Edit › Undo | _not routed_ | _n/a_ | no | **unavailable**: no verified automation route (see note) |
+| Redo | Edit › Redo | _not routed_ | _n/a_ | no | **unavailable**: no verified automation route (see note) |
+| Duplicate | Edit › Duplicate | _run probe_ | _run probe_ | yes (user test: Duplicate 5 → 6) | verified in route metadata; re-run probe to confirm the ID |
 | Easy Ease | Animation › Keyframe Assistant › Easy Ease | _run probe_ | _run probe_ | no | not run |
 | Add Marker (different category: Layer) | Layer › Add Marker | _run probe_ | _run probe_ | no | not run |
 
 Note: the menu path column is taken from the client catalog. The host resolver
 only returns the matched menu label, so check it against your AE menu.
+
+Note on Undo and Redo: the user's live tests showed that `app.executeCommand(2371)`, synthetic Ctrl+Z, and PowerShell SendKeys did not undo a Rebound Duplicate, while manual Edit → Undo did. Rebound does not route Undo or Redo until a verified automation route exists. Undo and Redo are not sent, and no command ID is used for them.
 
 Rule: do not record Redo, Duplicate, or Easy Ease as valid until the probe has
 resolved their IDs from your live host.
