@@ -39,3 +39,6 @@ docs/research/
 
 # Astro generated cache (site tooling run from the repo root)
 .astro/
+
+# Forensic runtime captures from a broken Shortcut Pad session. Not product configuration.
+invalidParam/
