@@ -1473,8 +1473,8 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 }
 .rb-shortcut-pad-cell {
   position: relative; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 3px; min-width: 0; min-height: 92px;
-  aspect-ratio: 1 / 1; padding: 10px 8px;
+  justify-content: center; gap: 3px; min-width: 0; min-height: 72px;
+  aspect-ratio: 1 / 1; padding: 9px 8px;
   overflow: hidden; border: 1px solid var(--rb-border-strong);
   border-bottom: 2px solid rgba(var(--rb-accent-rgb), 0.42);
   border-radius: 8px; background: var(--rb-bg-raised);
@@ -1514,6 +1514,29 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 }
 .rb-shortcut-pad-cell.is-failed { border-color: var(--rb-danger, #d66a72); }
 .rb-shortcut-pad-cell:disabled { cursor: progress; }
+.rb-shortcut-pad-grid > .rb-shortcut-pad-empty {
+  grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 8px; min-width: 0; padding: 10px;
+  border: 1px dashed var(--rb-border-strong); border-radius: 8px;
+  background: var(--rb-bg-sunken); text-align: center;
+}
+.rb-shortcut-pad-empty-title {
+  margin: 0; color: var(--rb-text-muted); font-size: 11px; font-weight: 600;
+}
+.rb-shortcut-pad-empty-cta {
+  min-height: 28px; padding: 0 10px; border: 1px solid var(--rb-accent);
+  border-radius: 6px; background: var(--rb-accent); color: #fff;
+  cursor: pointer; font: inherit; font-size: 11px; font-weight: 650;
+}
+.rb-shortcut-pad-empty-cta:focus-visible { outline: 2px solid var(--rb-accent); outline-offset: 2px; }
+.rb-shortcut-pad-slots-toggle {
+  flex: none; height: 26px; padding: 0 8px; border: 1px solid var(--rb-border);
+  border-radius: 6px; background: var(--rb-bg-raised); color: var(--rb-text-muted);
+  cursor: pointer; font: inherit; font-size: 10px; font-weight: 600; white-space: nowrap;
+}
+.rb-shortcut-pad-slots-toggle:hover,
+.rb-shortcut-pad-slots-toggle:focus-visible { border-color: var(--rb-accent); color: var(--rb-text); }
+.rb-shortcut-pad-add-full:disabled { opacity: 0.5; cursor: default; }
 .rb-shortcut-pad-action-name {
   max-width: 100%; overflow: hidden; color: var(--rb-text-faint);
   font-size: clamp(9px, 1.2vw, 11px); font-weight: 550; line-height: 1.15;
@@ -1531,7 +1554,7 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 }
 .rb-shortcut-pad-chord {
   display: block; max-width: 100%; overflow: hidden;
-  color: var(--rb-text-muted); font-size: clamp(8px, 2.5vw, 10px);
+  color: var(--rb-text-muted); font-size: 10px;
   font-weight: 550; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap;
 }
 .rb-shortcut-pad-run-status {

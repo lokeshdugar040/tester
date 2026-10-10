@@ -205,7 +205,12 @@ function createRuntime(options = {}) {
     actionId: action.id,
     deliveryRoute: 'host-command'
   }, action));
-  let stored = options.initialPads || null;
+  // Explicit default pins (the production store does not auto-seed them).
+  const defaultPins = [
+    { id: 'pin-undo', label: 'Undo', actionId: 'ae.undo', pinnedSlot: 0 },
+    { id: 'pin-redo', label: 'Redo', actionId: 'ae.redo', pinnedSlot: 1 }
+  ];
+  let stored = options.initialPads !== undefined ? options.initialPads : defaultPins;
   let writeFails = options.writeFails === true;
   const R = {
     log: {
@@ -374,14 +379,18 @@ function createRuntime(options = {}) {
 }
 
 describe('Shortcut Pad widget editing', () => {
-  it('renders populated pins plus one Add slot and dispatches one pin without storage writes', async () => {
+  it('renders only populated pins with one header Add and dispatches one pin without storage writes', async () => {
     const runtime = createRuntime();
     const beforeWrites = runtime.storageWrites.length;
     const cells = allElements(runtime.getGrid(), (node) =>
       node.tagName === 'BUTTON' && node.getAttribute('data-slot') !== null);
     const pinnedCount = runtime.padApi.all().filter((pad) => pad.pinnedSlot != null).length;
-    expect(cells).toHaveLength(pinnedCount + 1);
-    expect(cells.filter((cell) => cell.classList.contains('is-empty'))).toHaveLength(1);
+    // Normal mode renders only valid populated pins: no blank or trailing Add cells.
+    expect(cells).toHaveLength(pinnedCount);
+    expect(cells.filter((cell) => cell.classList.contains('is-empty'))).toHaveLength(0);
+    const headerAdd = runtime.findButton('+ Add', runtime.getHeader());
+    expect(headerAdd).not.toBeNull();
+    expect(headerAdd.hidden).toBe(false);
     expect(runtime.getGrid().getAttribute('aria-label')).toBe('Shortcut Pad');
     runtime.getGrid().clientWidth = 876;
     runtime.getGrid().parentNode.clientWidth = 876;
@@ -407,14 +416,25 @@ describe('Shortcut Pad widget editing', () => {
     expect(runtime.storageWrites).toHaveLength(beforeWrites);
   });
 
-  it('opens Add Shortcut from the single empty slot', () => {
+  it('opens Add Shortcut from the header control', () => {
     const runtime = createRuntime();
-    const addCell = allElements(runtime.getGrid(), (node) =>
-      node.tagName === 'BUTTON' && node.classList.contains('is-empty'))[0];
+    click(runtime.findButton('+ Add', runtime.getHeader()));
 
-    expect(addCell.getAttribute('data-slot')).toBe('2');
-    click(addCell);
+    expect(runtime.getEditModal().box.querySelector('.rb-modal-title').textContent)
+      .toBe('Add Shortcut');
+  });
 
+  it('shows one deliberate empty state with a single CTA when no pins are valid', () => {
+    const runtime = createRuntime({ initialPads: [] });
+    const cells = allElements(runtime.getGrid(), (node) =>
+      node.tagName === 'BUTTON' && node.getAttribute('data-slot') !== null);
+    expect(cells).toHaveLength(0);
+    const cta = allElements(runtime.getGrid(), (node) =>
+      node.classList.contains('rb-shortcut-pad-empty-cta'));
+    expect(cta).toHaveLength(1);
+    expect(cta[0].textContent).toBe('Add your first shortcut');
+
+    click(cta[0]);
     expect(runtime.getEditModal().box.querySelector('.rb-modal-title').textContent)
       .toBe('Add Shortcut');
   });
@@ -542,8 +562,9 @@ describe('Shortcut Pad widget editing', () => {
     const visibleCells = allElements(runtime.getGrid(), (node) =>
       node.tagName === 'BUTTON' && node.getAttribute('data-slot') !== null);
 
-    expect(visibleCells).toHaveLength(2);
-    expect(visibleCells.map((cell) => cell.textContent.trim())).toEqual(['UndoCtrl + Z', '+Add']);
+    // Duplicate pins are hidden from normal mode: one valid card, no Add cell.
+    expect(visibleCells).toHaveLength(1);
+    expect(visibleCells.map((cell) => cell.textContent.trim())).toEqual(['UndoCtrl + Z']);
     const repairNotice = runtime.findButton('1 shortcut needs repair', runtime.getHeader());
     expect(repairNotice).not.toBeNull();
     click(repairNotice);

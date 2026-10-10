@@ -83,7 +83,7 @@ describe('After Effects shortcut catalog', () => {
     expect(homeCssSource).toMatch(/\.rb-shortcut-pad-grid\s*\{[^}]*repeat\(6,/s);
     expect(homeCssSource).toContain('grid-auto-flow: row');
     expect(homeCssSource).toContain('align-content: start');
-    expect(homeCssSource).toContain('min-height: 92px');
+    expect(homeCssSource).toContain('min-height: 72px');
     expect(homeCssSource).not.toContain('max-width: 466px');
     expect(homeCssSource).not.toMatch(/word-break:\s*break-all/);
     expect(homeCssSource).toMatch(/\.rb-aeshortcuts-grid\s*\{[^}]*overflow-y:\s*auto/s);

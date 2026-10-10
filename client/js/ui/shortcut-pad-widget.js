@@ -18,7 +18,8 @@
       saving: false,
       savedPads: [],
       pendingPads: [],
-      repairOnly: false
+      repairOnly: false,
+      showAllSlots: false
     };
     var resizeObserver = null;
     var renderQueued = false;
@@ -48,11 +49,19 @@
         }
       }
     });
-    var fullPadAddButton = el('button.rb-shortcut-pad-add-full', {
+    var addButton = el('button.rb-shortcut-pad-add-full', {
       type: 'button',
-      hidden: true,
+      title: 'Add shortcut',
       onclick: function () { openAddSheet(null, null); }
     }, ['+ Add']);
+    var slotsToggle = el('button.rb-shortcut-pad-slots-toggle', {
+      type: 'button',
+      hidden: true,
+      onclick: function () {
+        shortcutPad.showAllSlots = !shortcutPad.showAllSlots;
+        render();
+      }
+    });
     var searchButton = el('button.rb-shortcut-pad-tool', {
       type: 'button',
       title: 'Search shortcuts',
@@ -70,7 +79,7 @@
     var header = el('div.rb-shortcut-pad-header', null, [
       title,
       el('div.rb-shortcut-pad-tools', null, [
-        repairNotice, fullPadAddButton, searchButton, menuButton, doneButton
+        repairNotice, slotsToggle, addButton, searchButton, menuButton, doneButton
       ])
     ]);
     var grid = el('div.rb-shortcut-pad-grid', {
@@ -216,32 +225,64 @@
       });
       root.classList.toggle('is-editing', isEditing());
       root.classList.toggle('is-repair-filtered', !!shortcutPad.repairOnly);
+      root.classList.toggle('is-empty', !isEditing() && pinnedPads.length === 0 &&
+        broken.length === 0);
       repairNotice.hidden = isEditing() || broken.length === 0;
       repairNotice.textContent = broken.length + ' shortcut' +
         (broken.length === 1 ? ' needs repair' : 's need repair');
       var firstEmptySlot = padApi.firstEmptySlot();
-      fullPadAddButton.hidden = isEditing() || firstEmptySlot != null;
+      addButton.hidden = isEditing();
+      addButton.disabled = firstEmptySlot == null;
+      addButton.title = firstEmptySlot == null
+        ? 'The Shortcut Pad is full (36 slots)' : 'Add shortcut';
       searchButton.hidden = isEditing();
       menuButton.hidden = isEditing();
       doneButton.hidden = !isEditing();
+      slotsToggle.hidden = !isEditing() || shortcutPad.repairOnly;
+      slotsToggle.textContent = shortcutPad.showAllSlots
+        ? 'Compact view' : 'Show all 36 slots';
       R.dom.clear(grid);
-      if (isEditing() && shortcutPad.repairOnly) {
+      if (!isEditing()) {
+        if (pinnedPads.length === 0 && broken.length === 0) {
+          grid.appendChild(renderEmptyState());
+        } else {
+          // Packed top-left, no reserved coordinates, no trailing Add cell.
+          pinnedPads.forEach(function (pad) {
+            grid.appendChild(renderSlot(pad.pinnedSlot, pad));
+          });
+        }
+      } else if (shortcutPad.repairOnly) {
         broken.forEach(function (pad) {
           grid.appendChild(renderSlot(pad.pinnedSlot, pad, brokenReasons[pad.id]));
         });
-      } else if (isEditing()) {
+      } else if (shortcutPad.showAllSlots) {
         for (var editSlot = 0; editSlot < SLOT_COUNT; editSlot++) {
           var editPad = bySlot[editSlot] || null;
           grid.appendChild(renderSlot(editSlot, editPad,
             editPad && brokenReasons[editPad.id]));
         }
       } else {
-        pinnedPads.forEach(function (pad) {
-          grid.appendChild(renderSlot(pad.pinnedSlot, pad));
+        // Compact edit view: populated pins (valid or needing repair) in slot
+        // order, plus at most one trailing Add tile.
+        var editPads = pads.filter(function (pad) {
+          return pad.pinnedSlot != null;
+        }).sort(function (left, right) { return left.pinnedSlot - right.pinnedSlot; });
+        editPads.forEach(function (pad) {
+          grid.appendChild(renderSlot(pad.pinnedSlot, pad, brokenReasons[pad.id]));
         });
         if (firstEmptySlot != null) grid.appendChild(renderSlot(firstEmptySlot, null));
       }
       scheduleFit();
+    }
+
+    function renderEmptyState() {
+      return el('div.rb-shortcut-pad-empty', null, [
+        el('p.rb-shortcut-pad-empty-title', { text: 'No shortcuts on this pad yet' }),
+        el('button.rb-shortcut-pad-empty-cta', {
+          type: 'button',
+          onclick: function () { openAddSheet(null, null); }
+        }, ['Add your first shortcut'])
+      ]);
     }
 
     function isRunnablePin(pad) {
@@ -284,6 +325,7 @@
       if (!shortcutPad.dirty) {
         shortcutPad.mode = 'normal';
         shortcutPad.repairOnly = false;
+        shortcutPad.showAllSlots = false;
         shortcutPad.selectedSlot = null;
         shortcutPad.savedPads = [];
         shortcutPad.pendingPads = [];
@@ -374,7 +416,7 @@
       if (chord) titleLines.push(chord);
       if (unavailable) {
         titleLines.push('Action unavailable: ' +
-          repairReason || pad.unavailableReason || MAPPING_MESSAGE);
+          (repairReason || pad.unavailableReason || MAPPING_MESSAGE));
       }
       var accessibleName = titleLines.filter(Boolean).join(', ');
       var runStatus = el('span.rb-shortcut-pad-run-status', {
@@ -392,9 +434,9 @@
         title: titleLines.join('\n'),
         'data-slot': slot == null ? '' : String(slot),
         onclick: function (event) {
+          // The click that ends a drag is swallowed by state, not by
+          // stopping the event: this is pointer input, never keyboard input.
           if (ignoreNextClick) {
-            event.preventDefault();
-            event.stopPropagation();
             ignoreNextClick = false;
             return;
           }
@@ -494,7 +536,7 @@
             : width >= 316 ? 3
               : width >= 216 ? 2 : 1;
       var rows = Math.max(1, Math.ceil(grid.children.length / columns));
-      var cellSize = Math.max(92,
+      var cellSize = Math.max(72,
         Math.floor((width - 24 - (columns - 1) * 8) / columns));
       var gridHeight = rows * cellSize + (rows - 1) * 8 + 24;
       grid.style.gridTemplateColumns = 'repeat(' + columns + ', minmax(0, 1fr))';
@@ -574,8 +616,15 @@
         toast('The shortcut could not be run.', 'error');
         return;
       }
-      if (result.state === 'Done' && result.verified === true) {
-        toast(result.userMessage || label + ' completed.', 'success');
+      if (result.state === 'Done') {
+        // Done = After Effects accepted and ran the command. Verified only when
+        // the command has an observable postcondition; otherwise "sent".
+        toast(result.userMessage || label + ' completed.',
+          result.verified === true ? 'success' : 'info');
+        return;
+      }
+      if (result.state === 'Loading') {
+        toast(result.userMessage || 'After Effects shortcuts are still loading.', 'info');
         return;
       }
       if (result.state === 'Ready' && !result.userMessage) return;
