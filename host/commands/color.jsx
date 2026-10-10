@@ -42,6 +42,25 @@
     return [clamp01(rgb[0]), clamp01(rgb[1]), clamp01(rgb[2])];
   }
 
+  function pick(args) {
+    var seed = -1;
+    if (args && args.hex != null) {
+      var match = /^#?([0-9a-f]{6})$/i.exec(String(args.hex));
+      if (!match) throw new Error('A valid six-digit hex color is required.');
+      seed = parseInt(match[1], 16);
+    }
+    if (typeof $.colorPicker !== 'function') throw new Error('After Effects color picker is unavailable.');
+    var value = $.colorPicker(seed);
+    if (value === -1 || value == null) return null;
+    value = Math.floor(Number(value));
+    if (!isFinite(value) || value < 0 || value > 16777215) {
+      throw new Error('After Effects returned an invalid color.');
+    }
+    var hex = value.toString(16);
+    while (hex.length < 6) hex = '0' + hex;
+    return { hex: '#' + hex.toLowerCase() };
+  }
+
   // Write [r, g, b] to a color property unless it is keyframed or expression-driven.
   function setColorProp(prop, rgb) {
     if (!prop) return false;
@@ -97,6 +116,37 @@
       }
     }
     return false;
+  }
+
+  function removeGradientFills(group) {
+    var removed = 0;
+    for (var i = group.numProperties; i >= 1; i--) {
+      var child = group.property(i);
+      if (child.matchName === GFILL) {
+        child.remove();
+        removed++;
+      } else if (child.matchName === GROUP_CONTENTS) {
+        removed += removeGradientFills(child);
+      } else if (child.matchName === VGROUP) {
+        var contents = child.property(GROUP_CONTENTS);
+        if (contents) removed += removeGradientFills(contents);
+      }
+    }
+    return removed;
+  }
+
+  function removeNamedEffects(layer, name) {
+    var effects = layer.property(EFFECT_PARADE);
+    if (!effects) return 0;
+    var removed = 0;
+    for (var i = effects.numProperties; i >= 1; i--) {
+      var effect = effects.property(i);
+      if (effect && effect.name === name) {
+        effect.remove();
+        removed++;
+      }
+    }
+    return removed;
   }
 
   // Append a real, editable solid Fill operator to a shape's root vectors group
@@ -191,6 +241,10 @@
     var wantStroke = target === 'stroke' || target === 'both';
     var root = layer.property(ROOT);
     if (root) {
+      if (wantFill) {
+        removeGradientFills(root);
+        removeNamedEffects(layer, 'Rebound Gradient');
+      }
       var hit = 0;
       if (wantFill) hit += recolorFills(root, rgb);
       if (wantStroke) hit += recolorStrokes(root, rgb);
@@ -208,6 +262,7 @@
       return false;
     }
     if (!wantFill) return false;
+    removeNamedEffects(layer, 'Rebound Gradient');
     if (isSolid(layer)) {
       return recolorSolid(comp, layer, rgb);
     }
@@ -366,6 +421,7 @@
     return { colors: colors };
   }
 
+  R.register('color.pick', pick); // platform-native color picker; no undo group
   R.register('color.apply', apply, 'Rebound: Color');
   R.register('color.read', read); // read-only, no undo group
   R.register('palette.collect', collect); // read-only, no undo group

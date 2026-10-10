@@ -168,7 +168,6 @@
       var input = el('input.rb-savedlg-input', {
         type: 'text', spellcheck: 'false', autocomplete: 'off', maxlength: '40',
         'data-autofocus': '1', value: suggestName(),
-        onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(); } },
         oninput: refreshHint
       });
       var hint = el('div.rb-savedlg-hint', { 'aria-live': 'polite', text: '' });
@@ -240,10 +239,9 @@
     }
 
     function saveTile() {
-      return el('div.rb-tile.rb-pg-save', {
-        role: 'button', tabindex: '0', title: 'Save current settings as a preset',
-        onclick: openSaveDialog,
-        onkeydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSaveDialog(); } }
+      return el('button.rb-tile.rb-pg-save', {
+        type: 'button', title: 'Save current settings as a preset',
+        onclick: openSaveDialog
       }, [
         el('div.rb-pg-savebtn', null, [el('span.rb-pg-plus', { text: '+' }), el('span', { text: 'Save' })])
       ]);

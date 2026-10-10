@@ -24,7 +24,7 @@
   // SVG/canvas (Align, Stagger, Backdrop, Drift, Lean, Motion, Follow...).
   function hasOwnPreview(host) {
     return !!host.querySelector(
-      '.rb-preview, .rb-preview-stage, .rb-curve, .rb-grad-editor, ' +
+      '.rb-preview, .rb-preview-stage, .rb-curve, .rb-grad-editor, .rb-color-preview, ' +
       'div[style*="rb-bg-sunken"] svg, div[style*="rb-bg-sunken"] canvas'
     );
   }
@@ -41,8 +41,6 @@
   var detailReturn = 'home';  // where Back returns to after a tool
   var lastCategory = 'ease';
   var searchQuery = '';
-  var cards = [];             // [{ tool, el }] currently shown
-  var activeIndex = -1;
 
   var railEl, browseEl, detailEl, mountsEl, breadcrumbEl, searchInput, homeEl;
   var homeScreenEl, homeScreenApi, homeRailBtn, browseBtn;
@@ -65,7 +63,7 @@
     mountsEl = el('div#rb-mounts.rb-grow');
     breadcrumbEl = el('span.rb-crumb');
     var backBtn = el('button.rb-btn.is-ghost.is-icon', {
-      'aria-label': 'Back to category', title: 'Back (Esc)', onclick: back
+      'aria-label': 'Back to category', title: 'Back', onclick: back
     }, [icon('<path d="M15 6l-6 6 6 6"/>')]);
     // Pin the open tool to the Home board, right from its header: the launcher
     // tile lands on the user's active board, one click away next time.
@@ -81,11 +79,7 @@
         backBtn,
         breadcrumbEl,
         el('span.rb-rail-spacer'),
-        pinToolBtn,
-        el('span.rb-kbd-hint', { title: 'Run this tool’s main action' }, [
-          el('span.rb-kbd', { text: ctrlSymbol() + '⏎' }),
-          el('span.rb-kbd-hint-label', { text: 'Apply' })
-        ])
+        pinToolBtn
       ]),
       mountsEl
     ]);
@@ -109,6 +103,13 @@
       onBrowse: function () { showCategory(lastCategory || R.toolMeta.SECTIONS[0].id); }
     });
     homeScreenEl = homeScreenApi.el;
+    R.shell = R.shell || {};
+    R.shell.refreshHomeShortcuts = function () {
+      if (homeScreenApi && homeScreenApi.refreshShortcuts) homeScreenApi.refreshShortcuts();
+      if (homeScreenApi && homeScreenApi.refresh) homeScreenApi.refresh();
+    };
+    R.shell.shortcutPads = homeScreenApi.shortcutPads;
+    R.shell.homeScreen = homeScreenApi;
     homeScreenEl.classList.add('rb-hidden');
 
     var main = el('div.rb-main', null, [
@@ -119,7 +120,6 @@
     app.appendChild(main);
 
     ctx = makeContext();
-    setupKeyboard();
     home.update(appStore.get().selection);
 
     if (R.bridge.available) {
@@ -133,6 +133,74 @@
           R.ui.toast(r.errors.length + ' feature module(s) failed to load — ' + r.errors[0], { kind: 'error', duration: 9000 });
         }
       }).catch(function () { /* old host without the command */ });
+      if (R.aeShortcutMap &&
+          R.afterEffectsShortcuts && R.afterEffectsShortcuts.updateFromKeymap) {
+        var lastKeymapSignature = null;
+        var keymapReadFailed = false;
+        var keymapReadPending = false;
+        var keymapReadPromise = null;
+        var menuCommandLoadPromise = null;
+        function loadRegisteredMenuCommands() {
+          if (R.afterEffectsShortcuts.menuCommandsReady &&
+              R.afterEffectsShortcuts.menuCommandsReady()) return Promise.resolve();
+          if (menuCommandLoadPromise) return menuCommandLoadPromise;
+          menuCommandLoadPromise = R.bridge.invoke('aeShortcut.resolveMenuCommands', {})
+            .then(function (commands) {
+              R.afterEffectsShortcuts.updateMenuCommands(commands);
+            }).catch(function (err) {
+              R.log.warn('Could not resolve registered After Effects menu commands', err);
+            });
+          return menuCommandLoadPromise;
+        }
+        function refreshActiveKeymap(forceHostRefresh) {
+          if (keymapReadPending) {
+            var pending = keymapReadPromise || Promise.resolve();
+            return forceHostRefresh
+              ? pending.then(function () { return refreshActiveKeymap(true); })
+              : pending;
+          }
+          keymapReadPending = true;
+          keymapReadPromise = R.bridge.invoke('aeShortcut.readKeymap', {}).then(function (result) {
+            if (!result || typeof result.contents !== 'string') {
+              throw new Error('After Effects returned invalid active keymap contents.');
+            }
+            var signature = [result.version || '', result.filename || '', result.contents].join('\u0000');
+            if (!forceHostRefresh && signature === lastKeymapSignature && !keymapReadFailed &&
+                R.afterEffectsShortcuts.keymapLoaded()) return;
+            var map = R.aeShortcutMap.parse(result.contents);
+            lastKeymapSignature = signature;
+            keymapReadFailed = false;
+            R.afterEffectsShortcuts.updateFromKeymap(map);
+            if (homeScreenApi && homeScreenApi.refreshShortcuts) homeScreenApi.refreshShortcuts();
+            return R.bridge.invoke('aeShortcut.resolveActiveKeymap', {
+              entries: R.afterEffectsShortcuts.keymapEntries(),
+              routeCandidates: R.afterEffectsShortcuts.routeCandidates()
+            }).then(function (commands) {
+              R.afterEffectsShortcuts.updateRuntimeCommands(commands);
+              if (homeScreenApi && homeScreenApi.refreshShortcuts) homeScreenApi.refreshShortcuts();
+            }).catch(function (err) {
+              keymapReadFailed = true;
+              R.log.warn('Could not resolve active After Effects shortcut routes', err);
+            });
+          }).catch(function (err) {
+            keymapReadFailed = true;
+            if (R.afterEffectsShortcuts.markUnavailable) {
+              R.afterEffectsShortcuts.markUnavailable();
+            }
+            if (R.bus) R.bus.emit('ae-shortcut-map:error', err);
+            if (homeScreenApi && homeScreenApi.refreshShortcuts) homeScreenApi.refreshShortcuts();
+            R.log.warn('Could not load the active After Effects keymap', err);
+          }).then(function () {
+            keymapReadPending = false;
+            keymapReadPromise = null;
+            return true;
+          });
+          return keymapReadPromise;
+        }
+        R.afterEffectsShortcuts.refreshActiveKeymap = refreshActiveKeymap;
+        refreshActiveKeymap();
+        loadRegisteredMenuCommands();
+      }
     } else {
       R.log.info('Running outside the host, selection polling disabled.');
       // Dev-only hook so the panel can be driven with a fake selection in the
@@ -191,28 +259,6 @@
     var span = el('span.rb-icon');
     span.innerHTML = R.toolMeta.svg(inner);
     return span;
-  }
-
-  // Platform-appropriate modifier glyph for shortcut hints.
-  function ctrlSymbol() {
-    var mac = /Mac|iPod|iPhone|iPad/.test((navigator && navigator.platform) || '');
-    return mac ? '⌘' : 'Ctrl ';
-  }
-
-  // Run the visible tool's primary action (its footer primary button), so the
-  // whole apply flow is reachable from the keyboard.
-  function triggerPrimaryAction() {
-    if (view !== 'detail') return false;
-    var id = appStore.get().activeTool;
-    var m = id && mounted[id];
-    if (!m || !m.wrap) return false;
-    var btn = m.wrap.querySelector('.rb-action-bar .rb-btn.is-primary');
-    if (!btn || btn.disabled) return false;
-    btn.click();
-    // Acknowledge the apply right on the button (green ring + check), so a
-    // keyboard apply is as visible as a click.
-    if (R.ui.flashSuccess) R.ui.flashSuccess(btn);
-    return true;
   }
 
   function buildDemo(d) {
@@ -295,7 +341,6 @@
       if (searchQuery.trim()) renderSearch();
       else showCategory(lastCategory);
     });
-    R.dom.on(searchInput, 'keydown', onListKeydown);
 
     var search = el('div.rb-search.rb-grow', null, [
       svgSpan('rb-search-icon', '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>'),
@@ -384,7 +429,6 @@
     highlightRail(catId);
     showBrowse();
     R.dom.clear(browseEl);
-    cards = [];
 
     var section = sectionMeta(catId);
     var tools = toolsInSection(catId);
@@ -395,7 +439,6 @@
     var grid = el('div.rb-card-grid');
     tools.forEach(function (t) { grid.appendChild(makeCard(t)); });
     browseEl.appendChild(grid);
-    setActiveCard(cards.length ? 0 : -1);
   }
 
   function renderSearch() {
@@ -403,7 +446,6 @@
     highlightRail(null);
     showBrowse();
     R.dom.clear(browseEl);
-    cards = [];
     var results = searchTools(searchQuery.trim().toLowerCase());
     browseEl.appendChild(el('div.rb-cat-head', null, [
       el('span.rb-cat-title', { text: 'Search' }),
@@ -420,7 +462,6 @@
     var grid = el('div.rb-card-grid');
     results.forEach(function (t) { grid.appendChild(makeCard(t)); });
     browseEl.appendChild(grid);
-    setActiveCard(0);
   }
 
   function searchTools(q) {
@@ -466,14 +507,7 @@
         el('div.rb-card-desc', { text: m.desc || '' })
       ])
     ]);
-    cards.push({ tool: tool, el: card });
     return card;
-  }
-
-  function setActiveCard(i) {
-    activeIndex = i;
-    for (var c = 0; c < cards.length; c++) cards[c].el.classList.toggle('is-active', c === i);
-    if (i >= 0 && cards[i] && cards[i].el.scrollIntoView) cards[i].el.scrollIntoView({ block: 'nearest' });
   }
 
   // ---- Detail ---------------------------------------------------------------
@@ -492,6 +526,34 @@
     if (!sr.method) { try { sr.apply(null, sel); } catch (e) { /* tool read failed; ignore */ } return; }
     if (!ctx.invoke) return;
     ctx.invoke(sr.method, {}).then(function (r) { if (r) { try { sr.apply(r, sel); } catch (e2) { /* ignore */ } } }).catch(function () {});
+  }
+
+  function bentoizeTool(host) {
+    Array.prototype.forEach.call(host.children, function (root) {
+      if (!root.classList.contains('rb-col') || root.classList.contains('rb-bento-layout')) return;
+      var source = Array.prototype.slice.call(root.childNodes);
+      var sections = [];
+      var section = null;
+      source.forEach(function (node) {
+        var startsSection = node.nodeType === 1 && node.classList.contains('rb-section-label');
+        var startsSurface = node.nodeType === 1 && node.matches(
+          '.rb-preview, .rb-curve, .rb-anchor-stage, .rb-grad-editor, .rb-preview-stage, .rb-color-preview'
+        );
+        if (!section || startsSection || startsSurface) {
+          section = el('section.rb-bento-section');
+          sections.push(section);
+        }
+        section.appendChild(node);
+      });
+      if (!sections.length) return;
+      root.classList.add('rb-bento-layout');
+      sections.forEach(function (card) {
+        if (card.querySelector('.rb-preview, .rb-curve, .rb-anchor-stage, .rb-grad-editor, .rb-preview-stage, .rb-color-preview')) {
+          card.classList.add('is-feature');
+        }
+        root.appendChild(card);
+      });
+    });
   }
 
   function openTool(tool) {
@@ -530,6 +592,7 @@
       if (meta && meta.diff) {
         host.insertBefore(buildDiffNote(meta.diff), host.firstChild);
       }
+      bentoizeTool(host);
       mounted[tool.id] = { wrap: wrap, api: api };
       // Auto-populate the tool from the selected object's current settings, but
       // only while this tool is the visible one.
@@ -649,67 +712,6 @@
     R.disk.write('recent-tools', r.slice(0, 8));
   }
 
-  // ---- Keyboard -------------------------------------------------------------
-
-  function onListKeydown(e) {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); setActiveCard(Math.min(activeIndex + 1, cards.length - 1)); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); setActiveCard(Math.max(activeIndex - 1, 0)); }
-    else if (e.key === 'Enter') { if (cards[activeIndex]) { e.preventDefault(); openTool(cards[activeIndex].tool); } }
-    else if (e.key === 'Escape') { if (searchQuery) { searchInput.value = ''; searchQuery = ''; showCategory('ease'); } }
-  }
-
-  function setupKeyboard() {
-    document.addEventListener('keydown', function (e) {
-      var tag = (e.target && e.target.tagName) || '';
-      var inInput = /input|textarea/i.test(tag);
-
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        if (view === 'home') showCategory(lastCategory || R.toolMeta.SECTIONS[0].id);
-        if (searchInput) searchInput.select();
-        return;
-      }
-      // Ctrl/Cmd+Enter runs the active tool's main action from anywhere,
-      // including while typing in one of its fields.
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        if (triggerPrimaryAction()) e.preventDefault();
-        return;
-      }
-      if (e.key === '/' && !inInput) { e.preventDefault(); if (searchInput) searchInput.focus(); return; }
-
-      // User-assignable shortcuts: a bound chord runs its Home action from
-      // anywhere in the panel (when not typing). Reserved chords above already
-      // returned, so this never shadows Cmd+K / Cmd+Enter / Esc / Enter / "/".
-      if (!inInput && R.keybinds) {
-        var chord = R.keybinds.chordFromEvent(e);
-        if (chord && !R.keybinds.isReserved(chord)) {
-          var actionId = R.keybinds.actionIdForChord(chord);
-          if (actionId && R.homeActions) {
-            var action = R.homeActions.byId(actionId);
-            if (action) {
-              e.preventDefault();
-              R.homeActions.run(action, {
-                invoke: function (m, a) { return R.bridge.invoke(m, a); },
-                openTool: openToolById,
-                toast: R.ui.toast,
-                refreshSelection: pollSelection
-              }).catch(function () { /* toasted by run() */ });
-              return;
-            }
-          }
-        }
-      }
-
-      if (view === 'detail') {
-        if (e.key === 'Escape' && !inInput) { e.preventDefault(); back(); return; }
-        // A plain Enter applies too, as long as focus is not in a text field.
-        if (e.key === 'Enter' && !inInput) { if (triggerPrimaryAction()) e.preventDefault(); return; }
-        return;
-      }
-      if (!inInput) onListKeydown(e);
-    });
-  }
-
   // ---- Settings / selection / context --------------------------------------
 
   function applyMiscPrefs(s) {
@@ -747,12 +749,53 @@
   function pollSelection() {
     R.bridge.invoke('system.selectionSummary')
       .then(function (sel) {
-        var prev = appStore.get().selection;
+      if (R.afterEffectsShortcuts && R.afterEffectsShortcuts.updateContext) {
+        var helper = R.globalHotkeys && R.globalHotkeys.status
+          ? R.globalHotkeys.status() : {};
+        R.afterEffectsShortcuts.updateContext({
+          projectOpen: sel.projectOpen === true,
+          projectHasFile: sel.projectHasFile === true,
+          projectDirty: typeof sel.projectDirty === 'boolean' ? sel.projectDirty : null,
+          hasComp: sel.hasComp === true,
+          hasViewer: sel.hasViewer === true,
+          selectedLayerCount: Number(sel.selectedLayerCount) || 0,
+          selectedMaskCount: Number(sel.selectedMaskCount) || 0,
+          selectedMaskPathCount: Number(sel.selectedMaskPathCount) || 0,
+          selectedMaskVertexCount: Number(sel.selectedMaskVertexCount) || 0,
+          selectedPropertyCount: Number(sel.selectedPropertyCount) || 0,
+          totalSelectedKeys: Number(sel.totalSelectedKeys) || 0,
+          detectedContext: helper.detectedContext || 'Unknown',
+          aeForeground: typeof helper.aeForeground === 'boolean'
+            ? helper.aeForeground : null,
+          foregroundHwnd: helper.foregroundHwnd || '',
+          focusedHwnd: helper.focusedHwnd || ''
+        });
+      }
+      var prev = appStore.get().selection;
         if (JSON.stringify(prev) !== JSON.stringify(sel)) {
           appStore.update({ selection: sel });
         }
       })
       .catch(function (err) { R.log.warn('selection poll failed', err); });
+  }
+
+  function runHomeAction(action, source) {
+    if (!action || !action.id) return Promise.reject(new Error('Choose a registered action.'));
+    if (!R.actionRouter || !R.actionRouter.executeAction) {
+      return Promise.reject(new Error('The central action router is unavailable.'));
+    }
+    return R.actionRouter.executeAction(action.id, {
+      kind: source || 'settings-action',
+      actorCategory: 'human-user'
+    }).then(function (result) {
+      if (result.userMessage && R.ui && R.ui.toast) {
+        R.ui.toast(result.userMessage, {
+          kind: result.verified ? 'success' : result.state === 'Ready' ? 'warn' : 'error'
+        });
+      }
+      if (result.verified) pollSelection();
+      return result;
+    });
   }
 
   function makeContext() {
@@ -791,7 +834,7 @@
     R.ui.modal({
       title: 'Settings',
       width: 420,
-      body: R.settings.buildBody(function () { applySavedSettings(); })
+      body: R.settings.buildBody(function () { applySavedSettings(); }, runHomeAction)
     });
   }
 

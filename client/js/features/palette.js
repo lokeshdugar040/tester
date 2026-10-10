@@ -142,6 +142,7 @@
       ]);
       renderW();
       ctx.body.appendChild(el('div.rb-wgt', null, [head, swatchGrid]));
+      if (typeof ctx.setWidgetContentHeight === 'function') ctx.setWidgetContentHeight(68);
       return { destroy: function () {} };
     }
 
@@ -341,16 +342,6 @@
           }
           refresh();
         });
-
-  hi.addEventListener('keydown', function (e) {
-    if (
-      e.key === 'Enter' &&
-      rows[rows.length - 1] === r &&
-      rows.length < 10
-    ) {
-      addRow('#888888');
-    }
-  });
 
   var del = el(
     'button.rb-btn.is-ghost.is-icon',

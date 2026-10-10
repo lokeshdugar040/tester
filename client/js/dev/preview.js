@@ -135,7 +135,6 @@
   // Loud failure: the whole point of the harness is trustworthy screenshots, so
   // a screen that did not actually come up must never pass silently.
   function fail(msg) {
-    /* eslint-disable-next-line no-console */
     console.error('[rb-preview] ' + msg);
     document.documentElement.setAttribute('data-preview-error', msg);
     var banner = document.createElement('div');

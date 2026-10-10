@@ -47,26 +47,83 @@
     var d = R.disk.read('home-layout', null);
     if (d && d.boards && d.boards.length) {
       var idx = (typeof d.activeIdx === 'number' && d.activeIdx >= 0 && d.activeIdx < d.boards.length) ? d.activeIdx : 0;
+      if ((d.schemaVersion || 0) < 8) {
+        migrateHomeWidgets(d.boards[idx]);
+        ensureShortcutWidget(d.boards[idx]);
+        d.schemaVersion = 8;
+        if (!R.disk.write('home-layout', d) && R.log) {
+          R.log.error('Could not save the Home widget layout migration.');
+        }
+      }
       return { boards: d.boards.map(function (b) { return boardFrom(b.name || 'Board', b); }), activeIdx: idx };
     }
     // Migrate a single saved layout (schema <= 2), or start fresh, as Board 1.
-    return { boards: [boardFrom('Board 1', d)], activeIdx: 0 };
+    var board = boardFrom('Board 1', d);
+    if (d) {
+      migrateHomeWidgets(board);
+      ensureShortcutWidget(board);
+      if (!R.disk.write('home-layout', { schemaVersion: 8, boards: [board], activeIdx: 0 }) && R.log) {
+        R.log.error('Could not save the Home widget layout migration.');
+      }
+    }
+    return { boards: [board], activeIdx: 0 };
+  }
+
+  function migrateHomeWidgets(board) {
+    if (!board || !Array.isArray(board.items)) return false;
+    var changed = false;
+    var colorIndex = -1;
+    var gradientIndex = -1;
+    board.items.forEach(function (id, index) {
+      if (isWidgetPin(board, id, 'color')) colorIndex = index;
+      if (isWidgetPin(board, id, 'gradient')) gradientIndex = index;
+    });
+    if (colorIndex !== -1 && gradientIndex === -1) {
+      board.items.splice(colorIndex + 1, 0, 'widget-gradient');
+      board.spans = board.spans || {};
+      board.spans['widget-gradient'] = { c: 2, r: 2 };
+      changed = true;
+    } else if (colorIndex !== -1 && gradientIndex === board.items.length - 1 &&
+        gradientIndex !== colorIndex + 1) {
+      var gradientPin = board.items.splice(gradientIndex, 1)[0];
+      board.items.splice(colorIndex + 1, 0, gradientPin);
+      changed = true;
+    }
+    board.items.forEach(function (id) {
+      if (id !== 'widget-anchor' && id.indexOf('widget-anchor#') !== 0 &&
+          !(board.refs && board.refs[id] === 'widget-anchor')) return;
+      var span = board.spans && board.spans[id];
+      if (span && span.c === 3 && span.r === 3) {
+        span.c = 2;
+        span.r = 2;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
+  function isWidgetPin(board, id, toolId) {
+    return id === 'widget-' + toolId || id.indexOf('widget-' + toolId + '#') === 0 ||
+      (board.refs && board.refs[id] === 'widget-' + toolId);
+  }
+
+  function ensureShortcutWidget(board) {
+    if (!board || !Array.isArray(board.items) ||
+        board.items.some(function (id) { return isWidgetPin(board, id, 'ae-shortcuts'); })) return false;
+    board.items.push('widget-ae-shortcuts');
+    board.spans = board.spans || {};
+    board.spans['widget-ae-shortcuts'] = { c: Math.min(Number(board.cols) || 4, 4), r: 4 };
+    return true;
   }
 
   // The primary, full-bleed element of a tool's widget when "Fill" is on, and the
   // widgets that fill by default (their box IS the tool).
-  // Tools whose single primary element IS the whole widget when filled. Only
-  // tools with a real direct-manipulation surface that fills without scrolling
-  // belong here (mirrors WIDGET_TOOLS in home-actions.js). Align renders its own
-  // purpose-built button grid from its mount (ctx.widget), so it is not listed.
+  // Tools whose single primary element IS the whole widget when filled. Align
+  // and click-to-apply pickers build their own purpose-made widget surfaces.
   var WIDGET_FOCUS = {
-    anchor: '.rb-anchor-stage', ease: '.rb-curve', gradient: '.rb-grad-editor'
+    anchor: '.rb-anchor-stage', ease: '.rb-curve'
   };
-  // Inside the focused element, drop these so the widget keeps just the essential
-  // control (its secondary panel lives in the full tool, via the open control).
-  var WIDGET_HIDE = {
-    gradient: ['.rb-grad-panel']
-  };
+  var WIDGET_HIDE = {};
 
   // Only offer icons that fit the action, by group, so the picker stays relevant.
   var ICON_RELATED = {
@@ -146,7 +203,8 @@
     var spans = act.spans;                  // per-item grid span { c, r } (cells)
     var filled = act.filled;                // per-widget Fill (just the main control) state
     var board = act.board;                  // cell size: sm | md | lg
-    var cols = act.cols;                    // number of grid columns
+    var cols = act.cols;                    // number of configured grid columns
+    var visibleCols = cols;                 // viewport-adapted columns; never persisted
     var maximizedId = null;
     var editing = false;
     var dragId = null;
@@ -214,14 +272,22 @@
       var b = boards[activeIdx];
       b.items = ids; b.refs = refs; b.collapsed = collapsed; b.meta = meta; b.spans = spans; b.filled = filled; b.board = board; b.cols = cols;
     }
-    function persist() { syncToBoard(); R.disk.write('home-layout', { schemaVersion: 3, boards: boards, activeIdx: activeIdx }); }
+    function persist() {
+      syncToBoard();
+      if (!R.disk.write('home-layout', { schemaVersion: 8, boards: boards, activeIdx: activeIdx }) &&
+          opts.toast) {
+        opts.toast('Could not save the Home widget layout.', { kind: 'error' });
+      }
+    }
 
     // ---- Multiple boards (panels) ----
     function loadActive() {
       var b = boards[activeIdx];
       ids = b.items; refs = b.refs; collapsed = b.collapsed; meta = b.meta; spans = b.spans; filled = b.filled; board = b.board; cols = b.cols;
       grid.classList.remove('is-sm', 'is-md', 'is-lg'); grid.classList.add('is-' + board);
+      visibleCols = cols;
       grid.style.setProperty('--rb-home-cols', cols);
+      syncResponsiveCols();
       syncBoardBtns(); syncColsBtns(); applyBoardTheme();
     }
     // Per-board (per-grid) theme: scope the accent to the active board's grid, so
@@ -281,20 +347,36 @@
     function syncBoardBtns() {
       if (boardBtns) ['sm', 'md', 'lg'].forEach(function (b) { boardBtns[b].classList.toggle('is-active', board === b); });
     }
-    function setCols(n) { cols = n; grid.style.setProperty('--rb-home-cols', n); persist(); syncColsBtns(); render(); }
+    function setCols(n) { cols = n; syncResponsiveCols(); persist(); syncColsBtns(); render(); }
     function syncColsBtns() {
       if (colsBtns) [3, 4, 5, 6].forEach(function (n) { colsBtns[n].classList.toggle('is-active', cols === n); });
     }
 
     function applySpan(node, id, full) {
       var s = spans[id];
-      if (s) { node.style.gridColumn = 'span ' + Math.min(s.c, cols); node.style.gridRow = 'span ' + Math.min(s.r || 1, maxRowsFor(id)); }
+      if (s) { node.style.gridColumn = 'span ' + Math.min(s.c, visibleCols); node.style.gridRow = 'span ' + Math.min(s.r || 1, maxRowsFor(id)); }
       else if (full) { node.style.gridColumn = '1 / -1'; node.style.gridRow = ''; }
     }
 
+    function syncResponsiveCols() {
+      if (!grid) return false;
+      var width = grid.clientWidth;
+      if (!width) return false;
+      var gcs = window.getComputedStyle(grid);
+      var gap = parseFloat(gcs.columnGap || gcs.gap) || 8;
+      var minCellWidth = parseFloat(gcs.getPropertyValue('--rb-home-min-cell')) || 72;
+      var fitted = Math.max(1, Math.floor((width + gap) / (minCellWidth + gap)));
+      var next = Math.min(cols, fitted);
+      var changed = next !== visibleCols;
+      visibleCols = next;
+      if (changed || grid.style.getPropertyValue('--rb-home-cols') !== String(next)) {
+        grid.style.setProperty('--rb-home-cols', next);
+      }
+      return changed;
+    }
+
     // One grid row's height incl. the row gap, for converting between a pixel
-    // height and a whole-row span. Rows now stretch to fill the panel, so measure
-    // the real first track rather than the cell minimum.
+    // height and a whole-row span.
     function rowTrackPx(gcs) {
       var tracks = (gcs.gridTemplateRows || '').split(' ').map(parseFloat).filter(function (n) { return !isNaN(n); });
       return tracks.length ? tracks[0] : (parseFloat(gcs.getPropertyValue('--rb-home-cell')) || 78);
@@ -305,51 +387,16 @@
       return rowTrackPx(gcs) + rgap;
     }
 
-    // Fit the whole board into the panel height: shrink the cell (and the icon
-    // chip with it) so the rows the grid actually uses fill the available height
-    // exactly, instead of overflowing into a scrollbar. Tiles stay as large as
-    // they can while everything fits; a floor keeps them usable, below which the
-    // board scrolls as a last resort (a great many items in a very short panel).
-    // The CAP per size matches the .is-sm/.is-md/.is-lg cells in home.css.
-    var FIT_BASE = { sm: 54, md: 70, lg: 88 };
-    var FIT_MIN = 46;
+    // Row sizes remain stable at every panel height. A crowded board scrolls
+    // rather than shrinking controls below their intended size.
+    var FIT_BASE = { sm: 48, md: 58, lg: 72 };
     var fitPending = 0;
     function fitToHeight() {
       if (!grid || !ids.length) return;
-      var cap = FIT_BASE[board] || 70;
-      if (editing) {
-        // Edit mode: no shrink-fit. Rows hold the size cap and the board
-        // scrolls, so growing an item extends the board downward instead of
-        // squeezing every row. Stable row heights are also what keep the
-        // resize math and the glides steady while editing.
-        grid.style.setProperty('--rb-home-cell', cap + 'px');
-        grid.style.setProperty('--rb-home-ico', Math.max(15, Math.min(40, Math.round(cap * 0.4))) + 'px');
-        grid.style.overflowY = 'auto';
-        syncTight();
-        return;
-      }
-      var gcs = window.getComputedStyle(grid);
-      var rows = (gcs.gridTemplateRows || '').split(' ')
-        .map(parseFloat).filter(function (n) { return !isNaN(n); }).length;
-      var avail = grid.clientHeight;
-      if (!rows || avail <= 0) return; // not laid out yet (e.g. pre-mount)
-      var rgap = parseFloat(gcs.rowGap || gcs.gap) || 6;
-      // The height each row actually gets when the board fills the panel. With few
-      // items this exceeds the cap (rows stretch via 1fr); with many it is small.
-      var rowH = Math.floor((avail - (rows - 1) * rgap) / rows);
-      // Cell minimum: cap it so a sparse board does not balloon the min past its
-      // size, but shrink below the cap (down to a floor) when rows must get small.
-      grid.style.setProperty('--rb-home-cell', Math.max(FIT_MIN, Math.min(cap, rowH)) + 'px');
-      // Only scroll when the board GENUINELY overflows -- i.e. the rows had to be
-      // clamped up to the floor (rowH < FIT_MIN) so the content is taller than the
-      // panel. When everything fits, the rows fill the height exactly via 1fr, so
-      // keeping overflow `auto` would still show a 1px scrollbar from sub-pixel
-      // rounding between clientHeight and the real fractional layout. Hiding it in
-      // the fit case removes that phantom 1px scroll gap.
-      grid.style.overflowY = rowH < FIT_MIN ? 'auto' : 'hidden';
-      // Icon chip tracks the REAL row height (~40%), clamped so it neither dominates
-      // a tall tile nor vanishes in a short one.
-      grid.style.setProperty('--rb-home-ico', Math.max(15, Math.min(40, Math.round(rowH * 0.4))) + 'px');
+      var cap = FIT_BASE[board] || 58;
+      grid.style.setProperty('--rb-home-cell', cap + 'px');
+      grid.style.setProperty('--rb-home-ico', Math.max(18, Math.min(40, Math.round(cap * 0.4))) + 'px');
+      grid.style.overflowY = 'auto';
       syncTight();
     }
     function scheduleFit() {
@@ -372,6 +419,7 @@
         var wd = t.clientWidth;
         if (!wd) return;
         t.classList.toggle('is-tight', wd < 64);
+        t.classList.toggle('is-compact', t.clientHeight < 44);
       });
     }
 
@@ -432,12 +480,12 @@
         var gcs0 = window.getComputedStyle(grid);
         var gap0 = parseFloat(gcs0.columnGap || gcs0.gap) || 8;
         var rgap0 = parseFloat(gcs0.rowGap || gcs0.gap) || 8;
-        var cellW0 = (grid.clientWidth - (cols - 1) * gap0) / cols;
+        var cellW0 = (grid.clientWidth - (visibleCols - 1) * gap0) / visibleCols;
         var rect0 = node.getBoundingClientRect();
         var gRect0 = grid.getBoundingClientRect();
         var startCol = Math.max(1, Math.round((rect0.left - gRect0.left) / (cellW0 + gap0)) + 1);
         var startRow = Math.max(1, Math.round((rect0.top - gRect0.top + grid.scrollTop) / (rowTrackPx(gcs0) + rgap0)) + 1);
-        var maxC = cols - startCol + 1; // never grow into implicit columns
+        var maxC = visibleCols - startCol + 1; // never grow into implicit columns
         function placeGhost(c, r, cellW, cellH, gap, rgap) {
           snapGhost.style.left = ((startCol - 1) * (cellW + gap)) + 'px';
           snapGhost.style.top = ((startRow - 1) * (cellH + rgap)) + 'px';
@@ -451,7 +499,7 @@
           var gcs = window.getComputedStyle(grid);
           var gap = parseFloat(gcs.columnGap || gcs.gap) || 8;
           var rgap = parseFloat(gcs.rowGap || gcs.gap) || 8;
-          var cellW = (grid.clientWidth - (cols - 1) * gap) / cols;
+          var cellW = (grid.clientWidth - (visibleCols - 1) * gap) / visibleCols;
           var cellH = rowTrackPx(gcs);
           // Auto-scroll the board when the drag reaches its edges, so an item
           // can be grown past the fold.
@@ -508,6 +556,7 @@
             } catch (eSA) { settleMs = 0; }
           }
           if (drafted) {
+            if (startCol === 1 && drafted.c === visibleCols && visibleCols < cols) drafted.c = cols;
             if (mode !== 'widget' && drafted.c === 1 && drafted.r === 1) delete spans[id]; else spans[id] = drafted;
             // Re-order the ids to match the board the user is LOOKING at, so the
             // re-render (which replays placement from order) keeps the grown item
@@ -548,6 +597,180 @@
 
     var grid = el('div.rb-home-grid');
 
+    function resolveShortcutPad(pad) {
+      return R.shortcutPads && R.shortcutPads.resolve
+        ? R.shortcutPads.resolve(pad)
+        : { enabled: false, label: pad && pad.label || 'Shortcut', chord: '' };
+    }
+    function sendShortcutPad(pad, options) {
+      if (!pad || !pad.id) return Promise.reject(new Error('This shortcut is invalid.'));
+      options = options || {};
+      if (R.actionRouter && R.actionRouter.executePin) {
+        return R.actionRouter.executePin(pad.pinId || pad.id, {
+          kind: options.source || 'shortcut-pad',
+          actorCategory: options.actorCategory || 'human-user',
+          pinId: pad.pinId || pad.id,
+          triggerChord: options.triggerChord || ''
+        });
+      }
+      return Promise.reject(new Error('The central pin execution handler is unavailable.'));
+    }
+    function notifyShortcutPadsChanged() {
+      if (R.bus) R.bus.emit('ae-shortcut-pads:updated');
+    }
+
+    var shortcutPadsApi = {
+      all: function () { return R.shortcutPads ? R.shortcutPads.all() : []; },
+      send: sendShortcutPad,
+      resolve: resolveShortcutPad,
+      reset: function () {
+        if (!R.shortcutPads || !R.shortcutPads.reset) {
+          throw new Error('Shortcut Pad reset is unavailable.');
+        }
+        var result = R.shortcutPads.reset();
+        notifyShortcutPadsChanged();
+        return result;
+      },
+      handleInput: function (event) {
+        if (!event || event.type !== 'tap' || typeof event.padId !== 'string') {
+          return Promise.reject(new Error('Shortcut Pad input requires a pad tap.'));
+        }
+        var pad = R.shortcutPads && R.shortcutPads.byId
+          ? R.shortcutPads.byId(event.padId) : null;
+        if (!pad) return Promise.reject(new Error('This shortcut is no longer available.'));
+        return sendShortcutPad(pad, { source: 'global-hotkey', triggerChord: event.chord || '' });
+      },
+      pinAction: function (actionId) {
+        if (!R.shortcutPads || !R.shortcutPads.actionForId(actionId)) {
+          throw new Error('Choose an available action to pin.');
+        }
+        var pads = R.shortcutPads.all();
+        var existing = pads.filter(function (pad) {
+          return pad.actionId === actionId && pad.pinnedSlot == null;
+        })[0];
+        var pinned = pads.filter(function (pad) {
+          return pad.actionId === actionId && pad.pinnedSlot != null;
+        })[0];
+        var pad = existing || pinned;
+        var created = false;
+        if (!pad) {
+          var action = R.shortcutPads.actionForId(actionId);
+          pad = R.shortcutPads.add(action.label, { actionId: actionId });
+          created = true;
+        } else if (existing) {
+          var slot = R.shortcutPads.firstEmptySlot();
+          if (slot != null) pad = R.shortcutPads.pinAt(existing.id, slot);
+        }
+        if (!created && pad && pad.pinnedSlot == null &&
+            R.shortcutPads.firstEmptySlot() != null) {
+          pad = R.shortcutPads.pinAt(pad.id, R.shortcutPads.firstEmptySlot());
+        }
+        notifyShortcutPadsChanged();
+        return {
+          pad: pad,
+          added: created,
+          alreadyPinned: !!(pinned && !existing),
+          needsSlot: !!(pad && pad.pinnedSlot == null)
+        };
+      },
+      add: function (label, actionId, hotkey, pinnedSlot) {
+        if (!R.shortcutPads) throw new Error('Shortcut Library is unavailable.');
+        var options = { actionId: actionId, hotkey: hotkey };
+        if (arguments.length > 3) options.pinnedSlot = pinnedSlot;
+        var pad = R.shortcutPads.add(label, options);
+        notifyShortcutPadsChanged();
+        return pad;
+      },
+      update: function (id, changes) {
+        if (!R.shortcutPads) return false;
+        var saved = R.shortcutPads.update(id, changes);
+        if (!saved) return false;
+        notifyShortcutPadsChanged();
+        return saved;
+      },
+      replaceAll: function (pads) {
+        if (!R.shortcutPads || !R.shortcutPads.replaceAll) {
+          throw new Error('Shortcut Pad transactions are unavailable.');
+        }
+        var saved = R.shortcutPads.replaceAll(pads);
+        notifyShortcutPadsChanged();
+        return saved;
+      },
+      pinAt: function (id, slot) {
+        if (!R.shortcutPads) throw new Error('Shortcut Pad is unavailable.');
+        var pad = R.shortcutPads.pinAt(id, slot);
+        if (pad) notifyShortcutPadsChanged();
+        return pad;
+      },
+      replaceAt: function (id, slot) {
+        if (!R.shortcutPads) throw new Error('Shortcut Pad is unavailable.');
+        var pad = R.shortcutPads.replaceAt(id, slot);
+        if (pad) notifyShortcutPadsChanged();
+        return pad;
+      },
+      atSlot: function (slot) {
+        return R.shortcutPads && R.shortcutPads.atSlot
+          ? R.shortcutPads.atSlot(slot) : null;
+      },
+      firstEmptySlot: function () {
+        return R.shortcutPads && R.shortcutPads.firstEmptySlot
+          ? R.shortcutPads.firstEmptySlot() : null;
+      },
+      clearFromPad: function (id) {
+        if (!R.shortcutPads || !R.shortcutPads.clearFromPad(id)) return false;
+        notifyShortcutPadsChanged();
+        return true;
+      },
+      remove: function (id) {
+        if (!R.shortcutPads) return false;
+        var bindingId = 'pad:' + id;
+        var previousChord = R.globalHotkeys && R.globalHotkeys.bindingFor
+          ? R.globalHotkeys.bindingFor(bindingId) : null;
+        if (previousChord) {
+          var cleared = R.globalHotkeys.clearBinding(bindingId);
+          if (!cleared || !cleared.ok) {
+            throw new Error(cleared && cleared.error || 'Could not remove the saved hotkey.');
+          }
+        }
+        var removed;
+        try {
+          removed = R.shortcutPads.remove(id);
+          if (!removed) {
+            if (previousChord) {
+              var restoredBinding = R.globalHotkeys.setBinding(bindingId, previousChord, {
+                allowConflict: true
+              });
+              if (!restoredBinding || !restoredBinding.ok) {
+                throw new Error('Shortcut was not removed and its hotkey could not be restored.');
+              }
+            }
+            return false;
+          }
+        } catch (error) {
+          if (previousChord) {
+            var restored = R.globalHotkeys.setBinding(bindingId, previousChord, {
+              allowConflict: true
+            });
+            if (!restored || !restored.ok) {
+              throw new Error(error.message + ' The saved hotkey could not be restored.');
+            }
+          }
+          throw error;
+        }
+        notifyShortcutPadsChanged();
+        return true;
+      },
+      move: function (id, offset) {
+        if (!R.shortcutPads || !R.shortcutPads.move(id, offset)) return false;
+        notifyShortcutPadsChanged();
+        return true;
+      },
+      columns: function () { return 3; },
+      setColumns: function (columns) {
+        if (!R.shortcutPads) throw new Error('Shortcut Pad is unavailable.');
+        return R.shortcutPads.setColumns(columns);
+      }
+    };
     // A big, readable tooltip (not the tiny native one). Shows the action name and
     // a short description on hover, positioned above the tile and kept on-panel.
     var tip = el('div.rb-home-tip');
@@ -638,7 +861,38 @@
       if (editing) tabsBar.appendChild(el('button.rb-home-tab.rb-home-tab-add', { type: 'button', title: 'New board', onclick: addBoard }, ['+']));
     }
 
-    var brand = el('div.rb-home-brand', null, [el('span.rb-home-mark', { html: R.brand.MARK }), el('span', { text: 'Rebound' })]);
+    var loadedAt = new Date();
+    function twoDigits(value) { return value < 10 ? '0' + value : String(value); }
+    function clockStamp(date) {
+      return twoDigits(date.getHours()) + ':' + twoDigits(date.getMinutes()) + ':' + twoDigits(date.getSeconds());
+    }
+    var version = R.brand.VERSION || 'unknown';
+    var loadedStamp = loadedAt.getFullYear() + '-' + twoDigits(loadedAt.getMonth() + 1) + '-' +
+      twoDigits(loadedAt.getDate()) + ' ' + clockStamp(loadedAt);
+    var buildInfo = el('span.rb-home-build', {
+      text: 'v' + version + ' · loaded ' + clockStamp(loadedAt),
+      title: 'Rebound v' + version + ' loaded ' + loadedStamp + ' (local time)'
+    });
+    if (R.bridge && R.bridge.available) {
+      R.bridge.invoke('system.env').then(function (info) {
+        if (!info || !info.appVersion) throw new Error('After Effects did not report its version.');
+        buildInfo.textContent = 'v' + version + ' · loaded ' + clockStamp(loadedAt);
+        buildInfo.title = 'Rebound v' + version + ' loaded ' + loadedStamp +
+          ' (local time) · After Effects ' + info.appVersion;
+      }).catch(function (err) {
+        buildInfo.textContent = 'v' + version + ' · loaded ' + clockStamp(loadedAt);
+        buildInfo.title = 'Rebound v' + version + ' loaded ' + loadedStamp +
+          ' (local time) · Could not read After Effects version: ' + err.message;
+        if (R.log) R.log.warn('Could not read After Effects version for the Home header.', err);
+      });
+    }
+    var brand = el('div.rb-home-brand', null, [
+      el('span.rb-home-mark', { html: R.brand.MARK }),
+      el('span.rb-home-brand-copy', null, [
+        el('span.rb-home-brand-name', { text: 'Rebound' }),
+        buildInfo
+      ])
+    ]);
     var actions = [addBtn, editBtn];
     if (opts.onBrowse) actions.push(iconBtn(ICON_BROWSE, 'Browse all tools', opts.onBrowse));
     var themeBtn = iconBtn(ICON_THEME, 'Theme & colours', function () { if (R.appearance) R.appearance.open(); });
@@ -658,7 +912,12 @@
     // different number of rows can fit). Changing the cell size does not change
     // the grid's own (flex-constrained) box, so this never loops.
     if (window.ResizeObserver) {
-      try { new ResizeObserver(scheduleFit).observe(grid); } catch (eRO) { /* older CEF */ }
+      try {
+        new ResizeObserver(function () {
+          if (syncResponsiveCols()) render();
+          scheduleFit();
+        }).observe(grid);
+      } catch (eRO) { /* older CEF */ }
     }
 
     function syncEdit() {
@@ -671,30 +930,27 @@
       if (editing) hideTip();
     }
 
-    // Merge a tile's saved setup (meta.args) over the action's default args, so a
-    // tile can be pointed at a specific easing, expression or shape.
-    function mergedArgs(action, override) {
-      var base = (action.invoke && action.invoke.args) || action.args || {}, out = {}, k;
-      for (k in base) if (base.hasOwnProperty(k)) out[k] = base[k];
-      if (override) for (k in override) if (override.hasOwnProperty(k) && override[k] != null && override[k] !== '') out[k] = override[k];
-      return out;
-    }
     function runAction(action) {
-      if (action.kind === 'open') {
-        // A pinned tool preset opens the tool WITH that preset loaded into its
-        // controls, so the tile means "the tool, set up exactly like this".
-        if (action.presetState && R.shell && R.shell.openToolWithPreset) R.shell.openToolWithPreset(action.toolId, action.presetState);
-        else opts.openTool(action.toolId);
-        return;
+      if (!action || !action.id) {
+        return Promise.reject(new Error('Choose a registered Home action.'));
       }
-      // build() computes {method, args} at click time (e.g. sampling a live
-      // curve, honouring config like keyframes-vs-expression); otherwise use the
-      // static invoke. Either way config overrides flow through mergedArgs.
-      var cfgArgs = mergedArgs(action, metaOf(action.id).args);
-      var inv = action.build ? action.build(cfgArgs) : { method: action.invoke.method, args: cfgArgs };
-      opts.invoke(inv.method, inv.args)
-        .then(function () { opts.toast(action.label + ' applied', { kind: 'success' }); if (opts.refreshSelection) opts.refreshSelection(); })
-        .catch(function (err) { opts.toast((err && err.message) || ('Could not apply ' + action.label), { kind: 'error' }); });
+      if (!R.actionRouter || !R.actionRouter.executeAction) {
+        return Promise.reject(new Error('The central action router is unavailable.'));
+      }
+      var configuration = metaOf(action.id).args || {};
+      return R.actionRouter.executeAction(action.id, {
+        kind: 'home-tile',
+        actorCategory: 'human-user',
+        configuration: configuration
+      }).then(function (result) {
+        if (opts.toast && result.userMessage) {
+          opts.toast(result.userMessage, {
+            kind: result.verified ? 'success' : result.state === 'Ready' ? 'warn' : 'error'
+          });
+        }
+        if (result.verified && opts.refreshSelection) opts.refreshSelection();
+        return result;
+      });
     }
 
     function removeItem(id) {
@@ -1065,9 +1321,29 @@
       var tool = R.tools.get(action.toolId);
       var host = el('div.rb-home-widget-body');
       var footer = el('div.rb-action-bar');
+      var card = null;
+      var baseSpanRows = action.toolId === 'ae-shortcuts'
+        ? 1 : (spans[action.id] && spans[action.id].r) || 1;
+      var widgetContentHeight = null;
+      function fitWidgetContent() {
+        if (!card || widgetContentHeight == null) return;
+        var gcs = window.getComputedStyle(grid);
+        var gap = parseFloat(gcs.rowGap || gcs.gap) || 6;
+        var chrome = Math.max(0, card.offsetHeight - host.clientHeight);
+        var rowHeight = FIT_BASE[board] || 58;
+        var rows = Math.max(baseSpanRows, Math.ceil((widgetContentHeight + chrome + gap) / (rowHeight + gap)));
+        card.style.gridRow = 'span ' + rows;
+        card.classList.add('is-sized');
+      }
       var wctx = {
         body: host, footer: footer, bridge: R.bridge, widget: true,
         invoke: opts.invoke, openTool: opts.openTool, toast: opts.toast,
+        shortcutPads: shortcutPadsApi,
+        setWidgetContentHeight: function (height) {
+          widgetContentHeight = Math.max(0, Number(height) || 0);
+          fitWidgetContent();
+          scheduleFit();
+        },
         refreshSelection: opts.refreshSelection || function () {},
         onSelection: opts.onSelection || function () { return function () {}; },
         getSelection: opts.getSelection || function () { return {}; },
@@ -1134,10 +1410,11 @@
       // broken". Say why, so a blocked curve-handle drag is never a mystery.
       shield.addEventListener('click', function () { opts.toast('Turn off Edit to use this widget', { kind: 'info' }); });
 
-      var card = el('div.rb-home-widget', { 'data-id': action.id }, [titleChip, controls, shield, host, footer]);
+      card = el('div.rb-home-widget', { 'data-id': action.id }, [titleChip, controls, shield, host, footer]);
+      fitWidgetContent();
       wireDrag(card, action.id);
       attachResize(card, action.id, 'widget');
-      widgetCache[action.id] = { card: card, destroy: destroy, collapseBtn: collapseBtn, maxBtn: maxBtn, wColor: wColor };
+      widgetCache[action.id] = { card: card, destroy: destroy, collapseBtn: collapseBtn, maxBtn: maxBtn, wColor: wColor, fitWidgetContent: fitWidgetContent };
       return card;
     }
 
@@ -1183,7 +1460,7 @@
       if (maximizedId !== action.id) {
         var s = spans[action.id];
         if (s && s.h && !s.r) { s.r = Math.max(1, Math.round(s.h / rowUnit())); delete s.h; }
-        card.style.gridColumn = (s && s.c && s.c < cols) ? ('span ' + s.c) : '1 / -1';
+        card.style.gridColumn = (s && s.c && s.c < cols) ? ('span ' + Math.min(s.c, visibleCols)) : '1 / -1';
         if (s && s.r) { card.style.gridRow = 'span ' + Math.min(s.r, maxRowsFor(action.id)); card.classList.add('is-sized'); }
       }
       entry.collapseBtn.textContent = collapsedOf(action.id) ? '▸' : '▾';
@@ -1284,6 +1561,7 @@
           node = tile(action);
         }
         grid.appendChild(node);
+        if (action.kind === 'widget' && widgetCache[id]) widgetCache[id].fitWidgetContent();
         // Each item gets its own entrance: the newly added one (rotating so back to
         // back adds differ), or every item staggered on first paint / board switch.
         if (id === lastAddedId) playEntrance(node, addSeq, action.kind, 0);
@@ -1499,6 +1777,15 @@
     return {
       el: root,
       refresh: render,
+      refreshShortcuts: notifyShortcutPadsChanged,
+      shortcutPads: shortcutPadsApi,
+      setEditing: function (value) {
+        editing = !!value;
+        syncEdit();
+        render();
+        return editing;
+      },
+      runAction: runAction,
       addItem: function (actionId) {
         if (!R.homeActions.byId(actionId)) return false;
         addItem(actionId);

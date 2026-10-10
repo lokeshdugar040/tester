@@ -19,9 +19,6 @@
     [0, 0.5], [0.5, 0.5], [1, 0.5],
     [0, 1], [0.5, 1], [1, 1]
   ];
-  // Fraction of the scene the card is inset by on each side. Mirrors the CSS
-  // `inset` on .rb-anchor-card / .rb-anchor-ghost so drag math maps to the card.
-  var PAD = 0.17;
   // How far past the layer edge you may pull the anchor (AE allows this).
   var OVERHANG = 0.35;
 

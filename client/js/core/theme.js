@@ -134,13 +134,13 @@
 
   function readSkin() {
     var bg = [30, 31, 35]; // refined default dark base (slightly cool); host overrides
-    var fontSize = 11;
+    var fontSize = 12;
     try {
       var env = R.bridge && R.bridge.cs ? R.bridge.cs.getHostEnvironment() : null;
       if (env && env.appSkinInfo) {
         var c = env.appSkinInfo.panelBackgroundColor.color; // 0..255 floats
         bg = [c.red, c.green, c.blue];
-        if (env.appSkinInfo.baseFontSize) fontSize = env.appSkinInfo.baseFontSize;
+        if (env.appSkinInfo.baseFontSize) fontSize = Math.max(12, Number(env.appSkinInfo.baseFontSize) || 12);
       }
     } catch (e) {
       if (R.log) R.log.warn('Theme: could not read host skin, using defaults', e);

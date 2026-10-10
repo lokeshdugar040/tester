@@ -1,11 +1,8 @@
 /*
  * Rebound, user-assignable keyboard shortcuts.
  *
- * A persisted map of { actionId: chord } where an action is any Home-action id
- * (see home-actions.js). The dispatcher in main.js builds a chord from each
- * keydown and runs the bound action. NOTE: a CEP panel only receives key events
- * while it is FOCUSED — these are panel shortcuts, not global AE hotkeys (which
- * only KBar / AE's own keymap can register). The Settings UI states this.
+ * Legacy display/configuration helpers for Rebound-assigned chords. No runtime
+ * keyboard dispatcher consumes these bindings; AE's native keymap is untouched.
  *
  * Chord format: modifier tokens then the key, e.g. "Alt+E", "Mod+Shift+R".
  * "Mod" = Cmd on macOS / Ctrl on Windows. Plain letters are normalized upper.
@@ -50,7 +47,12 @@
     if (e.altKey) parts.push('Alt');
     if (e.shiftKey) parts.push('Shift');
     if (key === ' ' || key === 'Spacebar') key = 'Space';
-    else if (key.length === 1) key = key.toUpperCase();
+    else if (key.length === 1) {
+      // Alt (Option) and dead keys can yield symbols or accented characters, so
+      // fall back to the physical key for letters/digits.
+      var m = (e.altKey || key.charCodeAt(0) > 127) && /^(?:Key([A-Z])|Digit([0-9]))$/.exec(e.code || '');
+      key = m ? (m[1] || m[2]) : key.toUpperCase();
+    }
     parts.push(key);
     return parts.join('+');
   }

@@ -239,7 +239,7 @@
       }));
       var circle = svg('circle', {
         cx: hxPix, cy: hyPix, r: 7, class: 'rb-handle', 'data-handle': key,
-        tabindex: 0, role: 'slider', 'aria-label': key === 'h1' ? 'Out handle' : 'In handle'
+        'aria-label': key === 'h1' ? 'Out handle' : 'In handle'
       });
       // An invisible, larger hit target so the handle is easy to grab — landing a
       // drag exactly on a 7px dot felt finicky ("buggy to grab"). It sits behind
@@ -253,7 +253,6 @@
       hit.addEventListener('pointerdown', startHandle);
       circle.addEventListener('mousedown', startHandle);
       circle.addEventListener('pointerdown', startHandle);
-      circle.addEventListener('keydown', handleKey(key));
       // Double-click a handle to reset just that handle to its Easy Ease
       // default (h1 0.33/0, h2 0.67/1) and commit — a per-handle Reset.
       var resetHandle = resetHandleFn(key);
@@ -325,25 +324,6 @@
         document.addEventListener('pointermove', move);
         document.addEventListener('pointerup', up);
         move(e);
-      };
-    }
-
-    function handleKey(key) {
-      return function (e) {
-        var stepX = e.shiftKey ? 0.1 : 0.01;
-        var hx = key === 'h1' ? curve.x1 : curve.x2;
-        var hy = key === 'h1' ? curve.y1 : curve.y2;
-        var changed = true;
-        if (e.key === 'ArrowLeft') hx -= stepX;
-        else if (e.key === 'ArrowRight') hx += stepX;
-        else if (e.key === 'ArrowUp') hy += stepX;
-        else if (e.key === 'ArrowDown') hy -= stepX;
-        else changed = false;
-        if (changed) {
-          e.preventDefault();
-          applyHandle(key, hx, hy, e);
-          if (opts.onCommit) opts.onCommit(clone(curve));
-        }
       };
     }
 

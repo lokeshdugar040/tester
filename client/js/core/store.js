@@ -167,8 +167,30 @@
         localStorage.setItem('rebound:' + name, json);
         return true;
       }
-    } catch (e2) { /* ignore */ }
+    } catch (e2) {
+      if (R.log) R.log.error('Persistence: failed writing ' + name, e2);
+    }
     return false;
+  }
+
+  function writeJsonAtomic(name, value) {
+    var file = fileFor(name);
+    if (!file) return writeJson(name, value);
+    var temporary = file + '.' + Date.now().toString(36) + '-' +
+      Math.floor(Math.random() * 0x100000000).toString(16) + '.tmp';
+    try {
+      node.fs.writeFileSync(temporary, JSON.stringify(value, null, 2), 'utf8');
+      node.fs.renameSync(temporary, file);
+      return true;
+    } catch (error) {
+      if (R.log) R.log.error('Persistence: failed atomically writing ' + name, error);
+      try {
+        if (node.fs.existsSync(temporary)) node.fs.unlinkSync(temporary);
+      } catch (cleanupError) {
+        if (R.log) R.log.error('Persistence: could not remove temporary ' + name, cleanupError);
+      }
+      return false;
+    }
   }
 
   R.createStore = createStore;
@@ -176,6 +198,7 @@
     available: !!node,
     dir: dataDir,
     read: readJson,
-    write: writeJson
+    write: writeJson,
+    writeAtomic: writeJsonAtomic
   };
 })(window.Rebound = window.Rebound || {});

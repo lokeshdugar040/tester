@@ -543,12 +543,14 @@
     });
     var dropIcon = el('span');
     dropIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 12l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>';
-    var drop = el('div.rb-drop', { role: 'button', tabindex: '0', onclick: function () { fileInput.click(); } }, [
+    var drop = el('button.rb-drop', {
+      type: 'button',
+      onclick: function () { fileInput.click(); }
+    }, [
       dropIcon,
       el('div.rb-drop-t', { text: 'Drop a .rbir file, or click to browse' }),
       el('div.rb-drop-sub', { text: 'Saved from any Rebound plugin' })
     ]);
-    drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
     drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('is-over'); });
     drop.addEventListener('dragleave', function () { drop.classList.remove('is-over'); });
     drop.addEventListener('drop', function (e) {

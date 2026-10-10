@@ -152,6 +152,7 @@
   loadCmd('commands/stroke.jsx');
   loadCmd('commands/textbreak.jsx');
   loadCmd('commands/gradient.jsx');
+  loadCmd('commands/ae-shortcuts.jsx');
 
   // Import / receive (rebuild a design from another app as native AE layers).
   // build.jsx defines the importer namespace + walk; the rest add builders and

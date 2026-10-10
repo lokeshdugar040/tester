@@ -63,11 +63,12 @@ function makeRuntime() {
   return { R, tools };
 }
 
-let tools, actions, methods;
+let tools, actions, methods, runtime;
 
 beforeAll(() => {
   methods = hostMethods();
   const { R, tools: captured } = makeRuntime();
+  runtime = R;
   const featDir = path.join(root, 'client/js/features');
   const failures = [];
   for (const f of readdirSync(featDir).filter((n) => n.endsWith('.js')).sort()) {
@@ -104,6 +105,25 @@ describe('one-click Home actions (tool quick specs + curated applies)', () => {
     const act = actions.find((a) => a.id === 'quick-textbreak');
     expect(act.kind).toBe('apply');
     expect(act.invoke.args.mode).toBe('words');
+  });
+
+  it('offers the categorized After Effects shortcut catalog as a Home widget', () => {
+    const tool = tools.find((t) => t.id === 'ae-shortcuts');
+    const widget = actions.find((action) => action.id === 'widget-ae-shortcuts');
+    expect(tool.title).toBe('Shortcut Pad');
+    expect(widget).toMatchObject({ kind: 'widget', toolId: 'ae-shortcuts' });
+    expect(runtime.homeActions.DEFAULT_BOARD.items).toContain('widget-ae-shortcuts');
+  });
+
+  it('offers Duplicate Selected Items as a directly runnable shortcut-pad action', () => {
+    const duplicate = actions.find((action) => action.id === 'duplicate-selected-items');
+    expect(duplicate).toMatchObject({
+      kind: 'apply',
+      invoke: {
+        method: 'aeShortcut.execute',
+        args: { id: 'ae-duplicate' }
+      }
+    });
   });
 
   it('every statically-invoking apply action targets a REAL host command', () => {

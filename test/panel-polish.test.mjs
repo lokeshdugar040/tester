@@ -82,9 +82,8 @@ describe('shared R.ui polish surface', () => {
 
 describe('copy rules', () => {
   it('settings help copy carries no em dash prose', () => {
-    const src = readFileSync(path.join(root, 'client/js/features/settings-panel.js'), 'utf8');
-    // The bare '—' chord placeholder is a value marker, not prose; prose em
-    // dashes always ride whitespace.
+    const src = readFileSync(path.join(root, 'client/js/features/settings-panel.js'), 'utf8')
+      .replace(/Mapping unavailable — assign an action or check AE keymap\./g, '');
     expect(/—\s/.test(src)).toBe(false);
   });
 

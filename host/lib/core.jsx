@@ -97,7 +97,7 @@ $.__rebound = (function (existing) {
     }
   }
 
-  api.version = '0.1.0';
+  api.version = '0.1.6';
   api.commands = commands;
   api.register = register;
   api.dispatch = dispatch;

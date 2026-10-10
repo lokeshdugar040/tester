@@ -191,15 +191,6 @@
       if (n == null) { root.classList.add('is-invalid'); return; }
       commit(n, true);
     });
-    on(input, 'keydown', function (e) {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        var d = (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1);
-        var n = (R.units.parseNumber(input.value) || 0) + d;
-        commit(n, true);
-      }
-    });
-
     // Drag the label to scrub the value. Pointer Lock hides the cursor and
     // reports unbounded relative motion, so scrubbing never stalls when the
     // pointer reaches the edge of the screen (the way After Effects and Flow
@@ -319,7 +310,6 @@
     var min = opts.min || 120;
     var max = opts.max || 640;
     var key = opts.persistKey ? 'ui:height:' + opts.persistKey : null;
-    var step = opts.step || 16;
 
     function clampH(h) { return h < min ? min : h > max ? max : h; }
     function setH(h, persist) {
@@ -335,8 +325,8 @@
     if (typeof saved === 'number' && saved > 0) target.style.height = clampH(Math.round(saved)) + 'px';
 
     var handle = el('div.rb-resize-h', {
-      role: 'separator', 'aria-orientation': 'horizontal', tabindex: 0,
-      'aria-label': 'Resize', title: 'Drag to resize · ↑/↓ to nudge · double-click to reset'
+      role: 'separator', 'aria-orientation': 'horizontal',
+      'aria-label': 'Resize', title: 'Drag to resize · double-click to reset'
     }, [el('span.rb-resize-grip')]);
 
     var start = null;
@@ -369,12 +359,6 @@
     // firing mouse events — bind both families; `start` dedupes the pair.
     handle.addEventListener('mousedown', down);
     handle.addEventListener('pointerdown', down);
-    handle.addEventListener('keydown', function (ev) {
-      var d = (ev.key === 'ArrowUp') ? -step : (ev.key === 'ArrowDown') ? step : 0;
-      if (!d) return;
-      ev.preventDefault();
-      setH((target.clientHeight || min) + d, true);
-    });
     handle.addEventListener('dblclick', function () { setH(opts.initial || min, true); });
 
     return { el: handle, setHeight: function (h) { setH(h, true); }, destroy: end };

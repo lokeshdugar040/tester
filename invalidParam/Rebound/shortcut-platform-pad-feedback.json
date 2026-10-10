@@ -1,0 +1,7 @@
+{
+  "sample-shortcut-undo": {
+    "status": "Failed",
+    "message": "The command was dispatched, but no action-specific postcondition is available.",
+    "updatedAt": "2026-10-10T00:57:46.346Z"
+  }
+}

@@ -11,6 +11,7 @@
  */
 ;(function (R) {
   'use strict';
+  var VERIFIED_ACTIONS_KEY = 'home-action-live-verifications';
 
   // Curated direct-apply actions across the tool set. Args mirror each host
   // command's expected shape.
@@ -36,6 +37,7 @@
   // label. desc: the line shown in the big hover tooltip. The user can override
   // the look per tile in the customizer.
   var APPLY = [
+    { id: 'duplicate-selected-items', label: 'Duplicate Selected Items', toolId: 'ae-shortcuts', group: 'Layer Management', kind: 'apply', display: 'icon', desc: 'Duplicate the selected layer in the active composition.', expectedResult: 'A duplicate layer is added to the active composition.', invoke: { method: 'aeShortcut.execute', args: { id: 'ae-duplicate' } } },
     { id: 'easy-ease', label: 'Easy Ease', toolId: 'keys', group: 'Easing', kind: 'apply', display: 'visual', curve: 'ease', config: EASE_CFG, desc: 'Ease selected keyframes in and out (F9).', invoke: { method: 'keys.setInterp', args: { type: 'easyEase' } } },
     { id: 'ease-in', label: 'Ease In', toolId: 'keys', group: 'Easing', kind: 'apply', display: 'visual', curve: 'easeIn', config: EASE_CFG, desc: 'Ease into the next keyframe (slow start).', invoke: { method: 'keys.setInterp', args: { type: 'easyEaseIn' } } },
     { id: 'ease-out', label: 'Ease Out', toolId: 'keys', group: 'Easing', kind: 'apply', display: 'visual', curve: 'easeOut', config: EASE_CFG, desc: 'Ease out of a keyframe (slow finish).', invoke: { method: 'keys.setInterp', args: { type: 'easyEaseOut' } } },
@@ -94,7 +96,7 @@
   // to scroll to show its controls. The curve-physics designers (Spring, Recoil,
   // Bounce) DO qualify: their live preview + curve graph + two sliders are the
   // whole tool, so designing a spring right on the board works.
-  var WIDGET_TOOLS = ['ease', 'anchor', 'gradient', 'align', 'library', 'palette', 'color', 'tags', 'keys', 'shapes', 'spring', 'recoil', 'bounce'];
+  var WIDGET_TOOLS = ['ease', 'anchor', 'gradient', 'align', 'library', 'palette', 'color', 'tags', 'keys', 'shapes', 'spring', 'recoil', 'bounce', 'ae-shortcuts'];
   function widgetActions() {
     return (R.tools.list() || []).filter(function (t) {
       return typeof t.mount === 'function' && WIDGET_TOOLS.indexOf(t.id) !== -1;
@@ -144,6 +146,7 @@
 
   function all() {
     return applyActions()
+      .concat((R.afterEffectsShortcuts && R.afterEffectsShortcuts.actions) ? R.afterEffectsShortcuts.actions() : [])
       .concat(quickActions())
       .concat(scriptActions())
       .concat(expressionActions())
@@ -151,6 +154,68 @@
       .concat(toolPresetActions())
       .concat(widgetActions())
       .concat(openActions());
+  }
+
+  function shortcutCatalog() {
+    return all().filter(function (action) {
+      return !!(action && action.id && action.label &&
+        (!action.aeMapShortcut || (action.displayChord && action.available !== false)));
+    }).map(function (action) {
+      var isAECommand = !!action.aeMapShortcut;
+      var route = action.deliveryRoute || (action.kind === 'open' || action.kind === 'widget'
+        ? 'open-tool' : 'host-command');
+      var verificationStatus = action.kind === 'open' && route === 'open-tool'
+        ? 'verified' : reboundActionVerified(action) ? 'verified' : 'unverified';
+      return {
+        id: action.id,
+        metadataId: action.canonicalRecord && action.canonicalRecord.metadataId || null,
+        label: action.label,
+        category: action.workflowCategory || action.category || action.group || 'Rebound',
+        description: action.description || action.expectedResult || action.desc || '',
+        requiredContext: action.requiredContext || 'Any workspace',
+        activeChord: isAECommand ? (action.activeChord || '') : '',
+        executionRoute: route,
+        fallbackRoute: action.fallbackRoute || null,
+        expectedResult: action.expectedResult || action.successCriteria || action.desc || '',
+        verificationStatus: verificationStatus,
+        userStatus: action.userStatus || 'Ready',
+        actionType: isAECommand ? 'ae-command'
+          : (action.presetName || action.presetState || action.group === 'Presets' ||
+            /^toolpreset-/.test(action.id) ? 'preset' : 'rebound'),
+        source: isAECommand ? 'after-effects-keymap' : 'rebound',
+        action: action
+      };
+    });
+  }
+
+  function reboundActionVerified(action) {
+    if (!action || action.kind !== 'apply' || action.build || !action.invoke ||
+        !action.invoke.method || !R.disk || !R.disk.read) return false;
+    var saved = R.disk.read(VERIFIED_ACTIONS_KEY, {});
+    var evidence = saved && saved[action.id];
+    return !!(evidence && evidence.method === action.invoke.method &&
+      evidence.args === JSON.stringify(defaultArgs(action)));
+  }
+
+  function markActionVerified(actionId, result, method, args) {
+    if (!result || result.verified !== true || result.executed !== true ||
+        !R.disk || !R.disk.read || !R.disk.write) return false;
+    var action = byId(actionId);
+    if (!action || action.kind !== 'apply' || action.build || !action.invoke ||
+        method !== action.invoke.method ||
+        JSON.stringify(args || {}) !== JSON.stringify(defaultArgs(action))) return false;
+    var saved = R.disk.read(VERIFIED_ACTIONS_KEY, {});
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) saved = {};
+    saved[action.id] = {
+      method: method,
+      args: JSON.stringify(args || {}),
+      verifiedAt: (new Date()).toISOString()
+    };
+    if (!R.disk.write(VERIFIED_ACTIONS_KEY, saved)) {
+      if (R.log) R.log.error('Could not persist live Rebound action verification.');
+      return false;
+    }
+    return true;
   }
 
   // Heal boards saved before the Recoil refactor: the Apple recoil tile used to be
@@ -192,16 +257,19 @@
     board: 'md',
     items: [
       'widget-ease',
-      'widget-align', 'widget-color',
+      'widget-ae-shortcuts',
+      'widget-align', 'widget-color', 'widget-gradient',
       'easy-ease', 'ease-in', 'ease-out', 'apply-recoil',
       'widget-anchor',
       'add-null', 'expr-wiggle', 'expr-loop'
     ],
     spans: {
       'widget-ease': { c: 4, r: 3 },
+      'widget-ae-shortcuts': { c: 4, r: 4 },
       'widget-align': { c: 2, r: 2 },
       'widget-color': { c: 2, r: 2 },
-      'widget-anchor': { c: 3, r: 3 }
+      'widget-gradient': { c: 2, r: 2 },
+      'widget-anchor': { c: 2, r: 2 }
     }
   };
 
@@ -212,31 +280,29 @@
     return out;
   }
 
-  // Run an action with its default configuration through a minimal ctx
-  // ({ invoke, openTool, toast?, refreshSelection? }). Used by the keyboard-
-  // shortcut dispatcher (the Home board has its own runner that also layers in
-  // per-tile config). 'open'/'widget' open the tool; 'apply' invokes the command.
+  // Run every Home action through the central router. Callers may supply a
+  // trigger source and per-action configuration, but never choose a route.
   function run(action, ctx) {
-    if (!action) return Promise.reject(new Error('Unknown action'));
-    if (action.kind === 'open' || action.kind === 'widget') {
-      // A preset-carrying open action loads its state into the tool's controls,
-      // so the pin means "the tool, set up exactly like this".
-      if (action.presetState && R.shell && R.shell.openToolWithPreset) R.shell.openToolWithPreset(action.toolId, action.presetState);
-      else if (ctx && ctx.openTool) ctx.openTool(action.toolId);
-      return Promise.resolve({ opened: action.toolId });
+    if (!action) return Promise.reject(new Error('Unknown action.'));
+    if (!R.actionRouter || !R.actionRouter.executeAction) {
+      return Promise.reject(new Error('The central action router is unavailable.'));
     }
-    var args = defaultArgs(action);
-    var inv = action.build ? action.build(args) : { method: action.invoke.method, args: args };
-    var p = ctx.invoke(inv.method, inv.args);
-    return p.then(function (res) {
-      if (ctx.toast) ctx.toast(action.label + ' applied', { kind: 'success' });
-      if (ctx.refreshSelection) ctx.refreshSelection();
-      return res;
-    }).catch(function (err) {
-      if (ctx.toast) ctx.toast((err && err.message) || ('Could not apply ' + action.label), { kind: 'error' });
-      throw err;
+    ctx = ctx || {};
+    var actionId = typeof action === 'string' ? action : action.id;
+    return R.actionRouter.executeAction(actionId, {
+      kind: ctx.source || 'home-action',
+      actorCategory: ctx.actorCategory || 'human-user',
+      configuration: ctx.configuration || {}
+    }).then(function (result) {
+      if (ctx.toast && result.userMessage) {
+        ctx.toast(result.userMessage, {
+          kind: result.verified ? 'success' : result.state === 'Ready' ? 'warn' : 'error'
+        });
+      }
+      if (result.verified && ctx.refreshSelection) ctx.refreshSelection();
+      return result;
     });
   }
 
-  R.homeActions = { applyActions: applyActions, openActions: openActions, widgetActions: widgetActions, scriptActions: scriptActions, expressionActions: expressionActions, presetActions: presetActions, all: all, byId: byId, run: run, defaultArgs: defaultArgs, DEFAULT: DEFAULT, DEFAULT_BOARD: DEFAULT_BOARD };
+  R.homeActions = { applyActions: applyActions, openActions: openActions, widgetActions: widgetActions, scriptActions: scriptActions, expressionActions: expressionActions, presetActions: presetActions, all: all, shortcutCatalog: shortcutCatalog, byId: byId, run: run, markActionVerified: markActionVerified, defaultArgs: defaultArgs, DEFAULT: DEFAULT, DEFAULT_BOARD: DEFAULT_BOARD };
 })(window.Rebound = window.Rebound || {});

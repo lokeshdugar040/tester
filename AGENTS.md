@@ -41,7 +41,7 @@ symlink to it.
 
 ```
 CSXS/manifest.xml        CEP manifest, declares the panel extension
-.debug                   CEP remote-debug port (panel 8718)
+.debug                   CEP remote-debug port (AEFT Host/@Port; default 8718)
 
 client/                  the panel (HTML/CSS/JS), runs in CEP's Chromium
   index.html             main panel; lists every script in load order
@@ -226,8 +226,9 @@ npm run pack
 ```
 
 Remote-debug a running panel: enable PlayerDebugMode, open the panel in AE, then
-visit `http://localhost:8718` in Chromium. Settings are an in-panel dialog, not
-a second extension, so there is only the one port. See
+visit `http://localhost:<Port>` in Chromium, using the `AEFT` port in `.debug`.
+Select the Rebound target for the live extension. Settings are an in-panel
+dialog, not a second extension, so there is only the one port. See
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Preview the panel UI in a plain
 browser (no host) with the static server in `tools/serve.mjs`.
 

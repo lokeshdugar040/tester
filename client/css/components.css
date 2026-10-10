@@ -104,7 +104,7 @@
   height: var(--rb-control-h);
   border: 1px solid var(--rb-border-strong);
   border-radius: var(--rb-radius-2);
-  background: var(--rb-bg-sunken);
+  background: var(--rb-surface-inset);
   overflow: hidden;
 }
 .rb-field:focus-within { border-color: var(--rb-accent); }
@@ -184,8 +184,8 @@
 .rb-color-input {
   -webkit-appearance: none;
   appearance: none;
-  width: 44px;
-  height: 24px;
+  width: 48px;
+  height: var(--rb-control-h);
   padding: 0;
   border: 1px solid var(--rb-border);
   border-radius: var(--rb-radius-2);
@@ -204,8 +204,8 @@
 }
 .rb-toggle .rb-toggle-track {
   position: relative;
-  width: 30px;
-  height: 16px;
+  width: 34px;
+  height: 18px;
   border-radius: var(--rb-radius-pill);
   background: var(--rb-bg-sunken);
   border: 1px solid var(--rb-border-strong);
@@ -217,14 +217,14 @@
   position: absolute;
   top: 1px;
   left: 1px;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--rb-text-muted);
   transition: transform var(--rb-transition), background var(--rb-transition);
 }
 .rb-toggle.is-on .rb-toggle-track { background: var(--rb-accent); border-color: var(--rb-accent); }
-.rb-toggle.is-on .rb-toggle-track::after { transform: translateX(14px); background: #fff; }
+.rb-toggle.is-on .rb-toggle-track::after { transform: translateX(16px); background: #fff; }
 
 /* ---- Tabs / nav rail ----------------------------------------------------- */
 .rb-tabs {
@@ -278,7 +278,7 @@
   padding: var(--rb-gap-3);
   border: 1px solid var(--rb-border);
   border-radius: var(--rb-radius-2);
-  background: var(--rb-bg-raised);
+  background: var(--rb-surface-card);
   cursor: pointer;
   transition: border-color var(--rb-transition), background var(--rb-transition);
 }
@@ -813,6 +813,17 @@
   flex: none;
 }
 .rb-kbd.is-empty { color: var(--rb-text-faint); background: none; border-color: transparent; }
+.rb-global-hotkey-row { justify-content: space-between; min-width: 0; }
+.rb-global-hotkey-info { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.rb-global-hotkey-info .rb-kbd-label { white-space: nowrap; }
+.rb-global-hotkey-info .rb-faint { font-size: calc(var(--rb-font-size) - 2px); white-space: nowrap; }
+.rb-global-hotkey-controls { display: flex; align-items: center; gap: var(--rb-gap-1); flex: none; }
+.rb-shortcut-map-tools input { flex: 1 1 auto; min-width: 0; }
+.rb-shortcut-map-row { align-items: flex-start; justify-content: space-between; min-width: 0; }
+.rb-shortcut-map-info { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.rb-shortcut-map-info .rb-kbd-label { white-space: normal; overflow-wrap: anywhere; }
+.rb-shortcut-map-info .rb-faint { font-size: calc(var(--rb-font-size) - 2px); overflow-wrap: anywhere; }
+.rb-shortcut-map-row > .rb-kbd { max-width: 48%; white-space: normal; overflow-wrap: anywhere; }
 .rb-btn-sm {
   padding: 2px 8px;
   font-size: calc(var(--rb-font-size) - 1px);

@@ -11,35 +11,11 @@
 
   var el = R.dom.el;
 
-  // Ranked tool ids per context type (real tool ids). Layer kinds without an
-  // explicit entry fall back to the generic av-layer set.
-  var ACTIONS = {
-    'keyframes-segment': ['ease', 'velocity', 'smooth', 'copyease'],
-    'keyframes-multi': ['ease', 'smooth', 'keys', 'bake'],
-    'single-keyframe': ['velocity', 'keys', 'copyease', 'ease'],
-    'property-no-keys': ['keys', 'ease', 'spring', 'separate'],
-    'layer-shape': ['color', 'stroke', 'trimpaths', 'break'],
-    'layer-text': ['textbreak', 'color', 'motion', 'stagger'],
-    'layer-null': ['link', 'nullify', 'anchor', 'drift'],
-    'layer-adjustment': ['color', 'vignette', 'echo', 'anchor'],
-    'layer-camera': ['motion', 'drift', 'follow', 'keys'],
-    'layer-light': ['motion', 'drift', 'follow', 'keys'],
-    'layer-av': ['anchor', 'motion', 'drift', 'echo'],
-    'multi-same': ['align', 'stagger', 'sequence', 'arrange'],
-    'multi-mixed': ['align', 'arrange', 'stagger', 'link']
-  };
-
   var KIND_LABEL = {
     shape: 'Shape', text: 'Text', solid: 'Solid', 'null': 'Null',
     adjustment: 'Adjustment', camera: 'Camera', light: 'Light',
     precomp: 'Precomp', footage: 'Footage', still: 'Still', audio: 'Audio', av: 'Layer'
   };
-
-  function actionsFor(typeId) {
-    if (ACTIONS[typeId]) return ACTIONS[typeId];
-    if (typeId.indexOf('layer-') === 0) return ACTIONS['layer-av'];
-    return [];
-  }
 
   function badge(text) { return el('span.rb-ctx-badge', { text: text }); }
   function pill(text) { return el('span.rb-ctx-pill', { text: text }); }

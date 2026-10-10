@@ -57,7 +57,8 @@
     check: '<path d="M4 12l5 5L20 6"/>',
     code: '<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/>',
     importIn: '<path d="M12 3v10M8 11l4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
-    pin: '<path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>'
+    pin: '<path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    keyboard: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M6 9h1M10 9h1M14 9h1M18 9h.5M6 12h1M10 12h1M14 12h1M18 12h.5M7 15h10"/>'
   };
 
   var SECTIONS = [
@@ -168,6 +169,7 @@
 
     // Organize & help
     tags: t('organize', ICONS.tag, 'Tag and select layers'),
+    'ae-shortcuts': t('organize', ICONS.keyboard, 'Browse and send shortcuts from the active After Effects keymap'),
     rename: t('organize', ICONS.text, 'Batch-rename layers with numbering',
       'Renames every selected layer at once with find/replace, prefix/suffix, and top-to-bottom sequential numbering, in one undoable step.'),
     scripts: t('organize', ICONS.code, 'Save, run and organize scripts and expressions'),

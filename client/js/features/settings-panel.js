@@ -14,9 +14,7 @@
 
   var SETTINGS_EVENT = 'com.meszmate.rebound.settingsChanged';
   var SCHEMA_VERSION = 1;
-  // Shown in the About block. Keep in sync with CSXS/manifest.xml
-  // (ExtensionBundleVersion) and package.json.
-  var PANEL_VERSION = '0.1.0';
+  var PANEL_VERSION = R.brand && R.brand.VERSION || 'unknown';
 
   var DEFAULTS = {
     schemaVersion: SCHEMA_VERSION,
@@ -88,103 +86,120 @@
     return row;
   }
 
-  // Build the settings form. onChange(settings) fires after each change (already
-  // persisted), so the host panel can re-apply theme/prefs live.
-  // One row of the shortcut editor: label · current chord · Set (record) · Clear.
-  function keybindRow(action) {
-    var chordEl = el('span.rb-kbd');
-    var setBtn = el('button.rb-btn.is-ghost.rb-btn-sm', { type: 'button', title: 'Record a shortcut' }, ['Set']);
-    var clearBtn = el('button.rb-btn.is-ghost.rb-btn-sm', { type: 'button', title: 'Clear shortcut' }, ['Clear']);
-    function refresh() {
-      var c = R.keybinds.bindingFor(action.id);
-      chordEl.textContent = c || '—';
-      chordEl.classList.toggle('is-empty', !c);
-      clearBtn.style.display = c ? '' : 'none';
-    }
-    setBtn.addEventListener('click', function () {
-      var prev = setBtn.textContent;
-      setBtn.textContent = 'Press keys…';
-      setBtn.classList.add('is-active');
-      function cleanup() {
-        document.removeEventListener('keydown', onKey, true);
-        setBtn.textContent = prev;
-        setBtn.classList.remove('is-active');
-      }
-      // Capture phase so the global dispatcher (bubble phase) never sees the key.
-      function onKey(ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (ev.key === 'Escape') { cleanup(); return; }
-        var chord = R.keybinds.chordFromEvent(ev);
-        if (!chord) return; // a modifier alone: keep listening
-        if (R.keybinds.isReserved(chord)) {
-          if (ui.toast) ui.toast(chord + ' is reserved by Rebound', { kind: 'error' });
-          return;
-        }
-        R.keybinds.setBinding(action.id, chord);
-        cleanup();
-        refresh();
-      }
-      document.addEventListener('keydown', onKey, true);
-    });
-    clearBtn.addEventListener('click', function () { R.keybinds.clearBinding(action.id); refresh(); });
-    refresh();
-    return el('div.rb-kbd-row', null, [
-      el('span.rb-kbd-label', { text: action.label || action.id }),
-      el('span.rb-spacer'),
-      chordEl, setBtn, clearBtn
-    ]);
-  }
-
   function buildKeybindsSection() {
-    var raw = (R.homeActions && R.homeActions.all && R.homeActions.all()) || [];
-    var seen = {}, list = [];
-    raw.forEach(function (a) { if (a && a.id && !seen[a.id]) { seen[a.id] = 1; list.push(a); } });
-    // The catalog carries several actions per tool that render as the SAME row
-    // text (open-color / widget-color / quick-stroke are all just "Color" or
-    // "Stroke"), so the list showed duplicate rows. Collapse them per tool +
-    // label, preferring an action that already has a binding, then a one-click
-    // apply (the most useful thing to put on a key).
-    var byRow = {}, deduped = [];
-    list.forEach(function (a) {
-      var key = (a.toolId || '') + '|' + String(a.label || a.id).toLowerCase();
-      var prev = byRow[key];
-      if (!prev) { byRow[key] = a; deduped.push(a); return; }
-      var aBound = !!R.keybinds.bindingFor(a.id);
-      var pBound = !!R.keybinds.bindingFor(prev.id);
-      if ((aBound && !pBound) || (aBound === pBound && a.kind === 'apply' && prev.kind !== 'apply')) {
-        deduped[deduped.indexOf(prev)] = a;
-        byRow[key] = a;
-      }
-    });
-    list = deduped;
-    list.sort(function (a, b) {
-      var g = String(a.group || '').localeCompare(String(b.group || ''));
-      return g || String(a.label || '').localeCompare(String(b.label || ''));
-    });
-    var listEl = el('div.rb-kbd-list.rb-scroll');
-    function render(filter) {
-      R.dom.clear(listEl);
-      var f = String(filter || '').toLowerCase(), n = 0;
-      list.forEach(function (a) {
-        if (f && String(a.label || '').toLowerCase().indexOf(f) === -1 &&
-            String(a.group || '').toLowerCase().indexOf(f) === -1) return;
-        listEl.appendChild(keybindRow(a));
-        n++;
-      });
-      if (!n) listEl.appendChild(el('div.rb-faint', { text: 'No actions match.' }));
-    }
-    var searchInput = el('input', { type: 'text', placeholder: 'Filter actions…' });
-    searchInput.addEventListener('input', function () { render(searchInput.value); });
-    render('');
     return section('Keyboard shortcuts', [
-      el('div.rb-faint', { text: 'Shortcuts run while the Rebound panel is focused (a CEP panel can’t register global After Effects hotkeys). Click Set, then press your combo: a letter, optionally with Alt / Shift / Cmd. Some combos are reserved.' }),
-      el('div.rb-field.rb-field-text', null, [searchInput]),
-      listEl
+      el('div.rb-faint', {
+        text: 'Rebound panel shortcuts are disabled so native After Effects keyboard input is never intercepted.'
+      })
     ]);
   }
 
-  function buildBody(onChange) {
+  function buildGlobalHotkeysSection() {
+    return section('Global After Effects shortcuts', [
+      el('div.rb-faint', {
+        text: 'Global shortcut interception is disabled. AE shortcut bindings remain native and unchanged.'
+      })
+    ]);
+  }
+
+  function buildAeShortcutMapSection() {
+    var mapData = null;
+    var supported = !!(R.bridge && R.bridge.available && R.aeShortcutMap);
+    var search = el('input', {
+      type: 'text',
+      placeholder: 'Search command, context, or key…',
+      'aria-label': 'Search the After Effects shortcut map',
+      disabled: true
+    });
+    var loadButton = el('button.rb-btn.is-ghost.rb-btn-sm', {
+      type: 'button',
+      disabled: !supported
+    }, ['Read active keymap']);
+    var summary = el('div.rb-faint', {
+      text: supported
+        ? 'Read-only list from the active After Effects shortcut preference file.'
+        : 'Reading the active keymap is currently supported on Windows inside After Effects.'
+    });
+    var list = el('div.rb-kbd-list.rb-shortcut-map-list.rb-scroll');
+
+    function render() {
+      R.dom.clear(list);
+      if (!mapData) {
+        list.appendChild(el('div.rb-faint', { text: 'Read the active AE keymap to show its commands and key combinations.' }));
+        return;
+      }
+      var query = String(search.value || '').toLowerCase();
+      var shown = 0;
+      mapData.entries.forEach(function (entry) {
+        var canonical = R.aeShortcutMap.canonicalRecord(entry);
+        var keys = canonical.displayChord || 'No AE shortcut assigned';
+        var haystack = (canonical.label + ' ' + canonical.workflowCategory + ' ' +
+          canonical.requiredContext + ' ' + entry.commandId + ' ' +
+          entry.context + ' ' + keys).toLowerCase();
+        if (query && haystack.indexOf(query) === -1) return;
+        var chord = el('span.rb-kbd', {
+          text: keys || '—',
+          title: keys
+        });
+        chord.classList.toggle('is-empty', !keys);
+        list.appendChild(el('div.rb-kbd-row.rb-shortcut-map-row', null, [
+          el('div.rb-shortcut-map-info', null, [
+            el('span.rb-kbd-label', { text: canonical.label }),
+            el('span.rb-faint', {
+              text: canonical.workflowCategory + ' · ' + canonical.requiredContext +
+                ' · ' + canonical.userStatus
+            })
+          ]),
+          chord
+        ]));
+        shown++;
+      });
+      if (!shown) list.appendChild(el('div.rb-faint', { text: 'No AE commands match that search.' }));
+      summary.textContent = shown + ' shown · ' + mapData.assigned + ' assigned · ' +
+        mapData.unassigned + ' without a key · AE ' + mapData.appVersion;
+    }
+
+    search.addEventListener('input', render);
+    loadButton.addEventListener('click', function () {
+      if (!supported) return;
+      loadButton.disabled = true;
+      loadButton.textContent = 'Reading…';
+      summary.textContent = 'Reading the active After Effects shortcut map…';
+      R.bridge.invoke('aeShortcut.readKeymap', {}).then(function (result) {
+        mapData = R.aeShortcutMap.parse(result.contents);
+        mapData.filename = result.filename;
+        mapData.appVersion = result.version;
+        if (R.afterEffectsShortcuts && R.afterEffectsShortcuts.updateFromKeymap) {
+          R.afterEffectsShortcuts.updateFromKeymap(mapData);
+          if (R.shell && R.shell.refreshHomeShortcuts) R.shell.refreshHomeShortcuts();
+        }
+        search.disabled = false;
+        render();
+      }).catch(function (err) {
+        mapData = null;
+        if (R.afterEffectsShortcuts && R.afterEffectsShortcuts.markUnavailable) {
+          R.afterEffectsShortcuts.markUnavailable();
+        }
+        if (R.bus) R.bus.emit('ae-shortcut-map:error', err);
+        if (R.shell && R.shell.refreshHomeShortcuts) R.shell.refreshHomeShortcuts();
+        summary.textContent = 'Mapping unavailable — assign an action or check AE keymap.';
+        if (R.log) R.log.error('Could not read the active After Effects shortcut map', err);
+        if (ui.toast) ui.toast('Mapping unavailable — assign an action or check AE keymap.', { kind: 'error' });
+      }).then(function () {
+        loadButton.disabled = false;
+        loadButton.textContent = 'Read active keymap';
+      });
+    });
+    render();
+    return section('After Effects shortcut map · read only', [
+      el('div.rb-faint', { text: 'Shows clean command labels, the active keymap binding, and availability for the keymap currently selected in After Effects.' }),
+      el('div.rb-shortcut-list-tools.rb-shortcut-map-tools', null, [search, loadButton]),
+      summary,
+      list
+    ]);
+  }
+
+  function buildBody(onChange, runAction) {
     var settings = load();
     applyTheme(settings);
 
@@ -234,8 +249,6 @@
         onChange: function (v) { update({ showUnitsOverlay: v }); } }).el
     ]));
 
-    if (R.keybinds && R.homeActions) body.appendChild(buildKeybindsSection());
-
     body.appendChild(section('Data', [
       el('div.rb-faint', { text: R.disk.available
         ? 'Presets and settings are stored in your user data folder.'
@@ -257,11 +270,41 @@
     return body;
   }
 
+  function buildShortcutSettings() {
+    var body = el('div.rb-col');
+    body.appendChild(buildKeybindsSection());
+    body.appendChild(buildGlobalHotkeysSection());
+    if (R.aeShortcutMap && R.bridge && R.bridge.available) {
+      body.appendChild(buildAeShortcutMapSection());
+    }
+    if (!body.childNodes.length) {
+      body.appendChild(el('div.rb-faint', {
+        text: 'Shortcut settings are unavailable until the panel finishes loading.'
+      }));
+    }
+    return body;
+  }
+
+  function openShortcutSettings() {
+    if (!R.ui || !R.ui.modal) {
+      if (ui.toast) ui.toast('Shortcut settings are unavailable.', { kind: 'error' });
+      return false;
+    }
+    R.ui.modal({
+      title: 'Shortcut settings',
+      width: 'min(680px, 100%)',
+      className: 'rb-modal-shortcut-settings',
+      body: buildShortcutSettings()
+    });
+    return true;
+  }
+
   R.settings = {
     DEFAULTS: DEFAULTS,
     load: load,
     persist: persist,
     applyTheme: applyTheme,
-    buildBody: buildBody
+    buildBody: buildBody,
+    openShortcutSettings: openShortcutSettings
   };
 })(window.Rebound = window.Rebound || {});

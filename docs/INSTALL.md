@@ -188,13 +188,19 @@ wrong-OS ZXP and Gatekeeper quarantine are by far the most common causes.
 
 ### Remote debugging
 
-With PlayerDebugMode enabled and the panel open in AE, open a Chromium-based
-browser at:
+With PlayerDebugMode enabled and the panel open in AE, read the `Port` value
+from the `AEFT` host entry in the root `.debug` file, then open a Chromium-based
+browser at `http://localhost:<Port>`. The current `.debug` configuration uses
+`8088`; always use the value in that file if it differs. The page lists
+inspectable targets; click **Rebound** to open DevTools against the live panel
+(not the static `8099` browser preview). The target URL ending in
+`client/index.html` is expected because it is the panel's manifest `MainPath`.
 
-- `http://localhost:8718`, main Rebound panel
-
-This port comes from the `.debug` file. You get full DevTools (console,
-elements, network) against the live panel.
+You get full DevTools (console, elements, network) against the live panel.
+If DevTools reports a disconnected WebSocket after the panel reloads, reopen
+the configured port and select **Rebound** again to attach to the current
+target. The ExtendScript host is a separate runtime and does not appear in the
+Chromium DOM inspector.
 
 ### Reading the CEP logs
 

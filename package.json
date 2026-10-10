@@ -1,6 +1,6 @@
 {
   "name": "rebound",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "private": true,
   "description": "Rebound — a free After Effects panel for easing, springs, and motion-design workflow tools.",
   "license": "MIT",

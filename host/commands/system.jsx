@@ -76,6 +76,19 @@
     return false;
   }
 
+  function hasMatchNameInChain(prop, matchName) {
+    var current = prop;
+    for (var depth = 0; current && depth < 20; depth++) {
+      try {
+        if (current.matchName === matchName) return true;
+        current = current.propertyGroup(1);
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  }
+
   // Per-kind extra state, kept cheap and stable enough for the 800ms poll.
   function kindState(layer, kind) {
     var st = {};
@@ -181,6 +194,7 @@
           var chg = (bVals[d] || 0) - (aVals[d] || 0);
           if (Math.abs(chg) > Math.abs(dv)) { dv = chg; dim = d; }
         }
+
       }
       var seg = { a: a, b: b, dim: dim, dv: dv, dt: dt };
       if (Math.abs(dv / dt) < 1e-6) { if (!fallback) fallback = seg; continue; }
@@ -238,15 +252,37 @@
   // A compact, panel-friendly snapshot of what is selected right now.
   R.register('system.selectionSummary', function () {
     var out = {
+      projectOpen: !!app.project,
+      projectFile: null,
+      projectHasFile: false,
+      projectDirty: null,
       hasComp: false,
+      hasViewer: false,
       compName: null,
       frameRate: 0,
       duration: 0,
       time: 0,
       selectedLayerCount: 0,
+      selectedMaskCount: 0,
+      selectedMaskPathCount: 0,
+      selectedMaskVertexCount: 0,
+      selectedPropertyCount: 0,
       totalSelectedKeys: 0,
       properties: []
     };
+    if (app.project && app.project.file) {
+      out.projectFile = app.project.file.fsName;
+      out.projectHasFile = true;
+    }
+    if (app.project && typeof app.project.dirty === 'boolean') {
+      out.projectDirty = app.project.dirty;
+    }
+    try {
+      var viewer = app.activeViewer;
+      var viewerTypes = $.global && $.global.ViewerType;
+      out.hasViewer = !!(viewer && viewerTypes &&
+        viewer.type === viewerTypes.COMPOSITION);
+    } catch (viewerError) {}
 
     var item = app.project ? app.project.activeItem : null;
     if (!util.isComp(item)) {
@@ -274,6 +310,11 @@
     var props = item.selectedProperties;
     for (var i = 0; i < props.length; i++) {
       var p = props[i];
+      out.selectedPropertyCount++;
+      if (hasMatchNameInChain(p, 'ADBE Mask Atom')) {
+        out.selectedMaskCount++;
+        if (String(p.matchName || '') === 'ADBE Mask Shape') out.selectedMaskPathCount++;
+      }
       // Skip property groups; we only summarise leaf, keyframable properties.
       if (!(p instanceof Property)) {
         continue;

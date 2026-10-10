@@ -15,5 +15,5 @@
       '<circle cx="27.05" cy="34" r="11.59" fill="currentColor"/>' +
     '</svg>';
 
-  R.brand = { MARK: MARK };
+  R.brand = { MARK: MARK, VERSION: '0.1.7' };
 })(window.Rebound = window.Rebound || {});

@@ -14,7 +14,8 @@
  *     footer: [cancelBtn, saveBtn],
  *     width: 360,
  *     initialFocus: input,
- *     onClose: function (reason) { ... }
+ *   onCloseRequest: function (reason) { ... },
+ *   onClose: function (reason) { ... }
  *   });
  *   dlg.close();
  */
@@ -71,29 +72,6 @@
       });
     }
 
-    // Escape is handled at the document level (capture) so it closes the dialog
-    // no matter where focus currently is, even if it drifted outside the box
-    // (e.g. after a native colour picker, or a click that blurred the dialog).
-    function onDocKeydown(e) {
-      if (closed) return;
-      if (e.key === 'Escape' && opts.closeOnEscape !== false) {
-        e.preventDefault(); e.stopPropagation();
-        close('escape');
-      }
-    }
-    document.addEventListener('keydown', onDocKeydown, true);
-
-    // Tab focus trap stays scoped to the box.
-    box.addEventListener('keydown', function (e) {
-      if (e.key === 'Tab') {
-        var f = focusable();
-        if (!f.length) { e.preventDefault(); box.focus(); return; }
-        var first = f[0], lastEl = f[f.length - 1], a = document.activeElement;
-        if (e.shiftKey && (a === first || a === box)) { e.preventDefault(); lastEl.focus(); }
-        else if (!e.shiftKey && a === lastEl) { e.preventDefault(); first.focus(); }
-      }
-    }, true);
-
     var prevFocus = document.activeElement;
     var prevOverflow = document.body.style.overflow;
     var app = document.getElementById('rb-app');
@@ -114,21 +92,23 @@
 
     function close(reason) {
       if (closed) return;
+      if (typeof opts.onCloseRequest === 'function' &&
+          opts.onCloseRequest(reason) === false) return;
       closed = true;
       if (current === handle) current = null;
-      overlay.classList.add('is-leaving');
       var reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
       var done = false;
       function teardown() {
         if (done) return;
         done = true;
-        document.removeEventListener('keydown', onDocKeydown, true);
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         document.body.style.overflow = prevOverflow;
         if (app) app.removeAttribute('aria-hidden');
         if (prevFocus && document.contains(prevFocus)) { try { prevFocus.focus(); } catch (err) { /* ignore */ } }
         if (typeof opts.onClose === 'function') opts.onClose(reason);
       }
+      if (opts.closeImmediately) { teardown(); return; }
+      overlay.classList.add('is-leaving');
       if (reduced) { teardown(); return; }
       overlay.addEventListener('transitionend', function te(ev) {
         if (ev.target === overlay && ev.propertyName === 'opacity') { overlay.removeEventListener('transitionend', te); teardown(); }

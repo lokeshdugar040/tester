@@ -39,11 +39,11 @@
 -->
 <ExtensionManifest Version="9.0"
                    ExtensionBundleId="com.meszmate.rebound"
-                   ExtensionBundleVersion="0.1.0"
+                   ExtensionBundleVersion="0.1.7"
                    ExtensionBundleName="Rebound"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.meszmate.rebound.panel" Version="0.1.0" />
+    <Extension Id="com.meszmate.rebound.panel" Version="0.1.7" />
   </ExtensionList>
 
   <ExecutionEnvironment>

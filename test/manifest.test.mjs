@@ -86,6 +86,22 @@ function tagBalance(xml) {
 describe('CSXS/manifest.xml', () => {
   const xml = read(MANIFEST);
 
+  it('keeps the panel, package, and visible build versions in sync', () => {
+    const packageJson = JSON.parse(read(path.join(root, 'package.json')));
+    const packageLock = JSON.parse(read(path.join(root, 'package-lock.json')));
+    const brandSource = read(path.join(root, 'client/js/core/brand.js'));
+    const visibleVersion = brandSource.match(/VERSION:\s*'([^']+)'/)?.[1];
+    const bundleVersion = attr(xml.match(/<ExtensionManifest\b[^>]*>/)?.[0] || '', 'ExtensionBundleVersion');
+    const panelVersion = attr(xml.match(/<Extension\b[^>]*Id="com\.meszmate\.rebound\.panel"[^>]*>/)?.[0] || '', 'Version');
+
+    expect(packageJson.version).toBe('0.1.7');
+    expect(packageLock.version).toBe(packageJson.version);
+    expect(packageLock.packages[''].version).toBe(packageJson.version);
+    expect(visibleVersion).toBe(packageJson.version);
+    expect(bundleVersion).toBe(packageJson.version);
+    expect(panelVersion).toBe(packageJson.version);
+  });
+
   it('contains no double hyphen inside a comment', () => {
     // The reason the header comment spells flags without leading dashes.
     for (const c of comments(xml)) {

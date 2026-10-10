@@ -210,8 +210,7 @@
     function manageDialog(preset) {
       if (!R.ui.modal) { if (confirmDelete(preset)) removeCustom(preset.id); return; }
       var input = el('input.rb-savedlg-input', { type: 'text', spellcheck: 'false', maxlength: '30',
-        value: preset.collection || 'Custom',
-        onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); save(); } } });
+        value: preset.collection || 'Custom' });
       var field = el('div.rb-savedlg-field', null, [el('span.rb-savedlg-label', { text: 'Collection' }), input]);
       var delBtn = el('button.rb-btn.is-ghost', { onclick: function () { handle.close('close'); if (confirmDelete(preset)) removeCustom(preset.id); } }, ['Delete']);
       var cancelBtn = el('button.rb-btn.is-ghost', { onclick: function () { handle.close('close'); } }, ['Cancel']);

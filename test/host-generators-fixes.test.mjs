@@ -200,14 +200,27 @@ describe('gradient.apply / gradient.read (real host code, grad stub)', () => {
   // A shape layer: root > Vector Group wrapper > Vectors Group contents.
   function shapeLayer({ withFill = false } = {}) {
     const root = mockGroup(ROOT);
+    const effects = mockGroup('ADBE Effect Parade');
     const wrapper = root.addProperty(VGROUP);
     const contents = wrapper.addProperty(GROUP_CONTENTS);
     if (withFill) contents.addProperty(FILL);
     return {
       name: 'Shape Layer 1',
-      property(name) { return name === ROOT ? root : null; },
+      sourceRectAtTime() { return { left: 0, top: 0, width: 100, height: 100 }; },
+      property(name) { return name === ROOT ? root : (name === 'ADBE Effect Parade' ? effects : null); },
       _root: root,
+      _effects: effects,
       _contents: contents
+    };
+  }
+
+  function effectLayer(name = 'Text Layer') {
+    const effects = mockGroup('ADBE Effect Parade');
+    return {
+      name,
+      sourceRectAtTime() { return { left: 10, top: 20, width: 200, height: 80 }; },
+      property(key) { return key === ROOT ? null : (key === 'ADBE Effect Parade' ? effects : null); },
+      _effects: effects
     };
   }
 
@@ -236,33 +249,77 @@ describe('gradient.apply / gradient.read (real host code, grad stub)', () => {
     expect(gradCalls.applyGradient[0].opts).toEqual({ type: 1, start: [-100, 0], end: [100, 0] });
   });
 
-  it('moves the G-Fill above an existing solid Fill (appended operators render behind)', () => {
+  it('replaces an existing solid Fill so it cannot cover the gradient', () => {
     const L = shapeLayer({ withFill: true });
     comp.selectedLayers = [L];
     commands['gradient.apply'](ARGS);
-
-    expect(L._contents.numProperties).toBe(2);
-    expect(L._contents.property(1).matchName).toBe(GFILL); // on top
-    expect(L._contents.property(2).matchName).toBe(FILL);  // solid kept
-  });
-
-  it('replaceFill removes the existing solid Fill only when explicitly asked', () => {
-    const L = shapeLayer({ withFill: true });
-    comp.selectedLayers = [L];
-    commands['gradient.apply'](Object.assign({}, ARGS, { replaceFill: true }));
 
     expect(L._contents.numProperties).toBe(1);
     expect(L._contents.property(1).matchName).toBe(GFILL);
   });
 
-  it('surfaces grad.reason() when the preset colour path fails', () => {
+  it('keeps the existing solid Fill only when replacement is explicitly disabled', () => {
+    const L = shapeLayer({ withFill: true });
+    comp.selectedLayers = [L];
+    commands['gradient.apply'](Object.assign({}, ARGS, { replaceFill: false }));
+
+    expect(L._contents.numProperties).toBe(2);
+    expect(L._contents.property(1).matchName).toBe(GFILL);
+    expect(L._contents.property(2).matchName).toBe(FILL);
+  });
+
+  it('uses an editable Gradient Ramp if native shape stop colours fail', () => {
     gradColorsOk = false;
-    comp.selectedLayers = [shapeLayer()];
+    const L = shapeLayer();
+    comp.selectedLayers = [L];
     const res = commands['gradient.apply'](ARGS);
 
     expect(res.applied).toBe(1);
     expect(res.colorsApplied).toBe(false);
     expect(res.reason).toBe('cannot write temp preset');
+    expect(res.effectsApplied).toBe(1);
+    expect(res.fallbackFailed).toBe(false);
+    expect(L._effects.property(1).matchName).toBe('ADBE Ramp');
+    expect(allSets(L._effects, 'ADBE Ramp-0002')).toEqual([[1, 0, 0]]);
+  });
+
+  it('applies a two-stop Gradient Ramp to selected text and replaces its prior Rebound effect', () => {
+    const L = effectLayer();
+    comp.selectedLayers = [L];
+    const first = commands['gradient.apply'](ARGS);
+    const second = commands['gradient.apply'](Object.assign({}, ARGS, { start: { x: 0.5, y: 0 }, end: { x: 0.5, y: 1 } }));
+
+    expect(first.applied).toBe(1);
+    expect(second.applied).toBe(1);
+    expect(second.effectsApplied).toBe(1);
+    expect(L._effects.numProperties).toBe(1);
+    expect(L._effects.property(1).matchName).toBe('ADBE Ramp');
+    expect(allSets(L._effects, 'ADBE Ramp-0001')).toEqual([[110, 20]]);
+    expect(allSets(L._effects, 'ADBE Ramp-0003')).toEqual([[110, 100]]);
+  });
+
+  it('preserves a multi-stop gradient on other layers with a reported four-colour approximation', () => {
+    const L = effectLayer('Footage Layer');
+    comp.selectedLayers = [L];
+    const args = Object.assign({}, ARGS, {
+      stops: [
+        { pos: 0, color: [1, 0, 0] },
+        { pos: 0.5, color: [0, 1, 0] },
+        { pos: 1, color: [0, 0, 1] }
+      ]
+    });
+    const res = commands['gradient.apply'](args);
+
+    expect(res.applied).toBe(1);
+    expect(res.effectsApplied).toBe(1);
+    expect(res.approximated).toBe(1);
+    expect(L._effects.property(1).matchName).toBe('ADBE 4ColorGradient');
+    expect(allSets(L._effects, 'ADBE 4ColorGradient-0003')).toEqual([[1, 0, 0]]);
+    const middleColor = allSets(L._effects, 'ADBE 4ColorGradient-0005')[0];
+    expect(middleColor[0]).toBeCloseTo(1 / 3);
+    expect(middleColor[1]).toBeCloseTo(2 / 3);
+    expect(middleColor[2]).toBe(0);
+    expect(allSets(L._effects, 'ADBE 4ColorGradient-0009')).toEqual([[0, 0, 1]]);
   });
 
   it('read() reports colorsUnreadable with stops:null instead of fabricating black->white', () => {

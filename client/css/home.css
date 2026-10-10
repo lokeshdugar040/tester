@@ -8,7 +8,7 @@
 .rb-home-head { display: flex; align-items: center; gap: 2px; flex: none; }
 /* Header action icons: explicitly sized so they read clearly and balance the
    wordmark (the shared .rb-btn.is-icon has no glyph size of its own). */
-.rb-home-head .rb-btn.is-icon { width: 26px; height: 26px; }
+.rb-home-head .rb-btn.is-icon { width: 30px; height: 30px; }
 .rb-home-head .rb-btn.is-icon svg { width: 17px; height: 17px; }
 /* Normal mode has no board controls, so the hint row is empty -- don't reserve a
    strip of space for it. It returns in edit mode (drag/arrange instructions). */
@@ -20,9 +20,12 @@
 /* The theme/colour control stands out in accent so it reads as "colours". */
 .rb-home-themebtn { color: var(--rb-accent); }
 .rb-home-themebtn:hover { background: rgba(var(--rb-accent-rgb), 0.16); color: var(--rb-accent); }
-.rb-home-brand { display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: calc(var(--rb-font-size) + 1px); color: var(--rb-text); letter-spacing: 0.01em; }
+.rb-home-brand { display: flex; align-items: center; gap: 5px; min-width: 0; font-weight: 700; font-size: calc(var(--rb-font-size) + 1px); color: var(--rb-text); letter-spacing: 0.01em; }
 .rb-home-mark { color: var(--rb-accent); display: inline-flex; align-items: center; }
 .rb-home-mark svg { display: block; width: auto; height: calc(var(--rb-font-size) + 5px); }
+.rb-home-brand-copy { display: flex; align-items: baseline; gap: 6px; min-width: 0; line-height: 1.15; }
+.rb-home-brand-name { display: inline; }
+.rb-home-build { display: block; max-width: 160px; overflow: hidden; color: var(--rb-text-faint); font-size: 8px; font-weight: 400; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
 .rb-home-title { font-size: calc(var(--rb-font-size) + 3px); font-weight: 700; color: var(--rb-text); }
 .rb-home-hint { color: var(--rb-text-faint); font-size: calc(var(--rb-font-size) - 1px); min-height: 0; flex: none; }
 
@@ -35,6 +38,7 @@
   font-size: calc(var(--rb-font-size) - 1px);
   transition: color var(--rb-transition), border-color var(--rb-transition), background var(--rb-transition);
 }
+.rb-shortcut-pad-grid [hidden] { display: none !important; }
 .rb-home-tab:hover { color: var(--rb-text); border-color: var(--rb-border-strong); }
 .rb-home-tab.is-active { color: var(--rb-accent); border-color: var(--rb-accent); background: rgba(var(--rb-accent-rgb), 0.12); }
 .rb-home-tab-name { white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
@@ -51,47 +55,31 @@
   position: relative; /* the resize snap-ghost positions in grid content space */
   display: grid;
   grid-template-columns: repeat(var(--rb-home-cols, 4), minmax(0, 1fr));
-  /* Rows stretch to fill the panel height: each row is at least one cell tall but
-     grows to share the leftover space, so the board takes up the whole panel at
-     any resolution (taller rows when there is room) instead of clustering at the
-     top. When there are too many rows for a short panel the min keeps cells usable
-     and the grid scrolls as a fallback. */
-  grid-auto-rows: minmax(var(--rb-home-cell, 70px), 1fr);
-  grid-auto-flow: row dense;
-  gap: var(--rb-home-gap, 6px);
-  align-content: stretch;
-  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
-  padding: 2px 2px 4px;
-}
-
-/* Base (max) cell per size. home-screen.js shrinks --rb-home-cell at runtime so
-   the actual rows fill the panel height exactly -- the board fits without
-   scrolling. These are the CAP (used when there is plenty of room) and the
-   pre-fit fallback; keep them in sync with the `base` map in home-screen.js. */
-/* Edit mode: rows stop stretching and the board scrolls instead of squeezing.
-   Fixed row heights keep the resize math and the FLIP glides steady, and
-   growing an item can always make room by extending the board downward. */
-.rb-home.is-editing .rb-home-grid {
+  /* Keep rows at a readable size instead of compressing the whole board into a
+     short panel. The board scrolls as needed; bento proportions stay consistent. */
   grid-auto-rows: var(--rb-home-cell, 70px);
+  grid-auto-flow: row dense;
+  gap: var(--rb-home-gap, 8px);
   align-content: start;
-  overflow-y: auto;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  padding: 2px;
 }
 
-.rb-home-grid.is-sm { --rb-home-cell: 54px; }
-.rb-home-grid.is-md { --rb-home-cell: 70px; }
-.rb-home-grid.is-lg { --rb-home-cell: 88px; }
+.rb-home-grid.is-sm { --rb-home-cell: 48px; }
+.rb-home-grid.is-md { --rb-home-cell: 58px; }
+.rb-home-grid.is-lg { --rb-home-cell: 72px; }
 
 /* Card look, configurable from Appearance (style + corner rounding). The default
    is a soft, modern, rounded card; data-cards on :root selects other styles. */
 :root {
-  --rb-card-radius: 7px;
+  --rb-card-radius: var(--rb-radius-3);
   /* Plain theme vars, NOT color-mix: AE's CEF Chromium does not support
      color-mix(), so a mixed border falls back to currentColor (white) and shows
      as white dashes in edit mode. These track the theme and render in AE. */
   --rb-card-bg: var(--rb-bg-raised);
   --rb-card-border: var(--rb-border);
-  --rb-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
-  --rb-card-hover-bg: var(--rb-bg-raised);
+  --rb-card-shadow: none;
+  --rb-card-hover-bg: var(--rb-control);
 }
 :root[data-cards="raised"] { --rb-card-bg: var(--rb-bg-raised); --rb-card-border: var(--rb-border); --rb-card-shadow: none; --rb-card-hover-bg: var(--rb-control, var(--rb-bg-raised)); }
 :root[data-cards="flat"] { --rb-card-bg: var(--rb-bg-sunken); --rb-card-border: var(--rb-border-strong); --rb-card-shadow: none; --rb-card-hover-bg: var(--rb-control, var(--rb-bg-raised)); }
@@ -108,6 +96,11 @@
   transition: border-color var(--rb-transition), background var(--rb-transition), color var(--rb-transition), box-shadow var(--rb-transition);
 }
 .rb-home-tile:hover { border-color: var(--rb-accent); background: var(--rb-card-hover-bg); }
+.rb-home-keyhint {
+  position: absolute; top: 2px; right: 3px; max-width: calc(100% - 6px); overflow: hidden;
+  padding: 0 3px; border-radius: 3px; background: var(--rb-bg-sunken); color: var(--rb-text-faint);
+  font-size: 8px; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
+}
 .rb-home-tile:active { background: var(--rb-bg-sunken); }
 
 .rb-home-ico {
@@ -228,6 +221,11 @@
 .rb-home-tile.is-lay-h .rb-home-label { text-align: left; }
 .rb-home-tile.is-lay-h.is-disp-visual { justify-content: flex-start; padding: 7px; }
 .rb-home-tile.is-lay-h .rb-home-tilevis { width: 46%; flex: none; height: 100%; }
+
+/* Fit labels and previews cleanly when the board compresses to short rows. */
+.rb-home-tile.is-compact { gap: 2px; padding: 2px 4px; }
+.rb-home-tile.is-compact.is-disp-visual { padding: 3px 5px 2px; }
+.rb-home-tile.is-compact .rb-home-tilevis { min-height: 14px; }
 
 /* Icon chip with the background turned off (just the glyph). */
 .rb-home-ico.is-nobg { background: transparent; }
@@ -599,31 +597,19 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 .rb-home-widget-body .rb-row { gap: var(--rb-gap-2); }
 .rb-home-widget .rb-action-bar { gap: var(--rb-gap-2); }
 
-/* In a home widget the rich picker (frame, pivot ghost, reticle, layer name) is
-   too much and leans on idle animation the CEF panel may not repaint. Collapse
-   it to one seamless full-bleed 3x3 grid of accent boxes: the nine anchor
-   points, edge to edge, no gaps, square corners, divided only by border lines.
-   STATIC, no scale or animation on hover/select. Same nine buttons, same
-   behaviour. */
+/* Keep the Home version focused on the nine anchor targets, without the full
+   tool's layer preview, pivot animation, or extra chrome. */
 .rb-home-widget .rb-anchor-ghost,
 .rb-home-widget .rb-anchor-face,
 .rb-home-widget .rb-anchor-grid,
 .rb-home-widget .rb-anchor-pin { display: none !important; }
 
-/* Divider lines: the same accent, a touch darker. A translucent black overlay
-   derives from whatever the accent is (no color-mix, which the AE CEF Chromium
-   does not render), so it always reads as the same colour just slightly darker. */
 .rb-home-widget .rb-anchor-stage {
-  --rb-anchor-line: rgba(0, 0, 0, 0.3);
-  /* Fill the whole tile: drop the stage's vertical padding so the grid reaches
-     the tile edges instead of floating with a margin. */
+  --rb-anchor-line: var(--rb-border-strong);
   padding: 0;
   height: 100%;
 }
 
-/* Tile body: the grid fills the whole tile. Drop the full-tool's fixed aspect
-   ratio / height caps so the box stretches edge to edge. The box background
-   shows through the gaps as the divider colour, and frames the whole grid. */
 .rb-home-widget .rb-anchor-box {
   width: 100%;
   height: 100%;
@@ -636,26 +622,20 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
   overflow: hidden;
 }
 
-/* The card becomes the full-bleed 3x3 grid; the nine boxes flow into the cells
-   with a 2px gap that reveals the divider colour behind them. */
 .rb-home-widget .rb-anchor-card {
   position: absolute;
   inset: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  gap: 2px;
-  padding: 2px;
+  gap: 1px;
+  padding: 1px;
   background: var(--rb-anchor-line);
   box-shadow: none;
-  border-radius: 0;
+  border-radius: var(--rb-radius-2);
   overflow: visible;
 }
 
-/* Each anchor point is a flat accent box filling its cell, square, divided from
-   its neighbours by the divider lines. All nine are the SAME solid accent. No
-   scale, no glow, no animation, no selected-state differentiation; only the
-   native tooltip (the button's title) on hover. */
 .rb-home-widget .rb-anchor-dot {
   position: relative;
   box-sizing: border-box;
@@ -670,36 +650,36 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
   padding: 0;
   transform: none;
   border: 0;
-  border-radius: 0;
-  background: var(--rb-accent);
+  border-radius: var(--rb-radius-1);
+  background: var(--rb-control);
   box-shadow: none;
   cursor: pointer;
   transition: none;
   animation: none;
 }
 .rb-home-widget .rb-anchor-dot:hover,
-.rb-home-widget .rb-anchor-dot:active,
-.rb-home-widget .rb-anchor-dot.is-active {
+.rb-home-widget .rb-anchor-dot:active {
   transform: none;
   box-shadow: none;
-  background: var(--rb-accent);
+  background: var(--rb-control-hover);
+}
+.rb-home-widget .rb-anchor-dot.is-active {
+  background: rgba(var(--rb-accent-rgb), 0.14);
+  box-shadow: inset 0 0 0 1px var(--rb-accent);
 }
 
-/* Inside each box, a little mark drawn from the box edges shows where this
-   anchor point sits: an L-bracket in a corner box, a single line on an edge
-   box, a plus in the centre. Same colour family as the boxes, a touch darker
-   (translucent black, no color-mix). Built from the two pseudo-elements:
-   ::before = horizontal arm, ::after = vertical arm. */
 .rb-home-widget .rb-anchor-dot::before,
 .rb-home-widget .rb-anchor-dot::after {
   content: '';
   position: absolute;
   display: none;
   border-radius: 1px;
-  /* Same family as the box, but readable: white on a dark/saturated accent,
-     darker on a light/white one (see --rb-accent-ink, computed per tile). */
-  background: var(--rb-accent-ink, #fff);
+  background: var(--rb-text-muted);
 }
+.rb-home-widget .rb-anchor-dot:hover::before,
+.rb-home-widget .rb-anchor-dot:hover::after,
+.rb-home-widget .rb-anchor-dot.is-active::before,
+.rb-home-widget .rb-anchor-dot.is-active::after { background: var(--rb-accent); }
 /* Stroke thickness scales with the box (--rb-anchor-mark-w, a % of the cell) so
    it grows with the widget; bump it for a bolder mark. */
 .rb-home-widget .rb-anchor-stage { --rb-anchor-mark-w: 9%; }
@@ -745,12 +725,6 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 .rb-home-widget.is-filled .rb-curve,
 .rb-home-widget.is-filled .rb-preview-stage { height: 100%; max-height: none; width: 100%; }
 .rb-home-widget.is-filled .rb-home-widget-body svg { max-height: none; }
-/* The gradient widget is the pure gradient: the hero canvas fills the whole box
-   (bigger widget, bigger gradient) with the stop bar fused at the very bottom and
-   nothing else. Editing a stop's colour/position lives in the full tool. */
-.rb-home-widget.is-filled .rb-grad-editor { height: 100%; gap: 0; overflow: hidden; }
-.rb-home-widget.is-filled .rb-grad-canvas { flex: 1 1 auto; height: auto; min-height: 0; margin: 0; border-radius: 0; }
-.rb-home-widget.is-filled .rb-grad-bar { margin: 0; border-radius: 0; }
 .rb-home-widget.is-filled .rb-curve svg { width: 100%; height: 100%; }
 .rb-home-widget.is-filled .rb-preview-stage > * { width: 100%; }
 
@@ -789,10 +763,10 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 .rb-home-widget .rb-wgt-alignbtn:active { background: var(--rb-accent); color: var(--rb-accent-text); border-color: var(--rb-accent); }
 .rb-home-widget .rb-wgt-alignbtn svg { width: 48%; height: 48%; max-width: 34px; max-height: 34px; }
 
-/* Picker widgets (Library / Palette / Colour / Tags / Keys / Shapes): a grid of
-   clickable items that fills the box and applies on click. Capped + centred like
-   the align grid, so they stay tidy at any size and never scroll; overflow:hidden
-   shows the items that fit (priority-ordered) rather than growing a scrollbar. */
+/* Picker widgets (Library / Palette / Colour / Gradient / Tags / Keys / Shapes): a grid of
+   clickable items that fills the box and applies on click. Most stay capped and
+   centred like the align grid; the editable Colour set grows its widget as needed
+   so every saved swatch remains visible without a scrollbar. */
 .rb-home-widget .rb-wgt-pick {
   flex: 1 1 auto; min-height: 0; display: grid;
   gap: 1px; overflow: hidden;
@@ -810,6 +784,158 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 .rb-home-widget .rb-wgt-picktile.is-active { color: var(--rb-text); border-color: var(--rb-accent); box-shadow: inset 0 0 0 1px var(--rb-accent); }
 .rb-home-widget .rb-wgt-picktile svg { width: 100%; height: auto; max-height: 60%; min-height: 0; display: block; }
 .rb-home-widget .rb-wgt-picktile-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts { display: flex; flex-direction: column; gap: 5px; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+.rb-aeshortcuts-pads { display: flex; flex: none; flex-direction: column; gap: 3px; min-width: 0; min-height: 0; }
+.rb-aeshortcuts-toolbar { display: flex; flex: none; flex-direction: column; gap: 4px; min-width: 0; }
+.rb-aeshortcuts-search {
+  width: 100%; min-width: 0; height: 26px; padding: 0 7px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  background: var(--rb-control); color: var(--rb-text); font: inherit;
+  font-size: calc(var(--rb-font-size) - 2px);
+}
+.rb-aeshortcuts-search:focus { outline: none; border-color: var(--rb-accent); }
+.rb-aeshortcuts-grid {
+  display: flex; flex: 1 1 auto; flex-direction: column; gap: 3px;
+  min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+}
+.rb-aeshortcuts-row {
+  display: grid; flex: none; grid-template-columns: minmax(0, 1fr) 26px;
+  align-items: center; gap: 5px; min-width: 0; min-height: 38px;
+}
+.rb-aeshortcuts-run {
+  display: flex; flex: 1 1 auto; flex-direction: row; align-items: center; justify-content: space-between;
+  gap: 8px; min-width: 0; min-height: 38px; padding: 5px 8px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: var(--rb-control); color: var(--rb-text); cursor: pointer;
+  font: inherit; text-align: left;
+}
+.rb-aeshortcuts-run:hover:not(:disabled) { border-color: var(--rb-accent); background: var(--rb-control-hover); }
+.rb-aeshortcuts-run:disabled { cursor: not-allowed; opacity: 0.56; }
+.rb-aeshortcuts-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.rb-aeshortcuts-label { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-meta { display: block; width: 100%; overflow: hidden; color: var(--rb-text-faint); font-size: calc(var(--rb-font-size) - 3px); text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-keylist { display: block; flex: none; max-width: 46%; overflow: hidden; padding: 2px 5px; border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1); background: var(--rb-bg-sunken); color: var(--rb-text-muted); font-size: calc(var(--rb-font-size) - 3px); text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-verification { max-width: 72px; overflow: hidden; color: var(--rb-text-faint); font-size: calc(var(--rb-font-size) - 4px); text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-pin { flex: none; width: 26px; height: 26px; padding: 0; border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1); background: var(--rb-control); color: var(--rb-text-muted); cursor: pointer; font: inherit; font-weight: 700; }
+.rb-aeshortcuts-pin:hover:not(:disabled) { border-color: var(--rb-accent); color: var(--rb-text); }
+.rb-aeshortcuts-pin:disabled { cursor: default; opacity: 0.42; }
+.rb-aeshortcuts-search-result {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 46px;
+  padding: 7px 9px; border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-2);
+  background: linear-gradient(145deg, var(--rb-bg-raised), var(--rb-control));
+  color: var(--rb-text); cursor: pointer; font: inherit; text-align: left;
+  transition: border-color var(--rb-transition), background var(--rb-transition),
+    transform var(--rb-transition), box-shadow var(--rb-transition);
+}
+.rb-aeshortcuts-search-result:hover:not(:disabled) {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14); transform: translateY(-1px);
+}
+.rb-aeshortcuts-search-result:disabled { cursor: not-allowed; opacity: 0.62; }
+.rb-aeshortcuts-search-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rb-aeshortcuts-search-label { overflow: hidden; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-search-category { overflow: hidden; color: var(--rb-text-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-search-status { color: var(--rb-text-muted); font-size: 10px; white-space: nowrap; }
+.rb-aeshortcuts-search-result.is-running .rb-aeshortcuts-search-status { color: var(--rb-accent); }
+.rb-aeshortcuts-search-result.is-done .rb-aeshortcuts-search-status { color: var(--rb-success, #45b887); }
+.rb-aeshortcuts-search-result.is-failed .rb-aeshortcuts-search-status { color: var(--rb-danger, #d66a72); }
+.rb-aeshortcuts-footer { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; min-height: 18px; }
+.rb-aeshortcuts-summary,
+.rb-aeshortcuts-status { overflow: hidden; color: var(--rb-text-faint); font-size: calc(var(--rb-font-size) - 2px); text-overflow: ellipsis; white-space: nowrap; }
+.rb-aeshortcuts-empty { align-self: center; padding: 8px; color: var(--rb-text-muted); text-align: center; font-size: calc(var(--rb-font-size) - 1px); }
+.rb-aeshortcuts-diagnostics { flex: none; min-width: 0; border-top: 1px solid var(--rb-border); color: var(--rb-text-muted); font-size: calc(var(--rb-font-size) - 2px); }
+.rb-aeshortcuts-diagnostics summary { padding: 4px 2px; cursor: pointer; }
+.rb-aeshortcuts-diagnostics-output { max-height: 150px; margin: 0; overflow: auto; white-space: pre-wrap; color: var(--rb-text-faint); font: 10px/1.4 monospace; }
+.rb-home-widget .rb-aeshortcuts-widget { height: 100%; gap: 2px; overflow: hidden; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-pads {
+  flex: 1 1 auto; min-height: 0; overflow: hidden;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-padgrid {
+  flex: 1 1 auto; gap: 0; padding: 2px 4px 4px; overflow-x: hidden;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-padgrid {
+  grid-template-rows: none;
+  justify-content: stretch; align-content: stretch; max-height: none; overflow-y: auto;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-group-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr); gap: 6px; height: 100%;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-group { flex: 1 1 auto; gap: 0; min-height: 0; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-item { aspect-ratio: auto; min-height: 0; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-button {
+  gap: 2px; padding: 4px 3px 3px; border-radius: 9px;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-icon { flex: 0 0 14px; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-icon svg { width: 15px; max-height: 14px; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-action {
+  display: block; padding: 1px 4px; font-size: 8px; line-height: 1.15;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-name {
+  font-size: 10px; line-height: 1.08;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-keycaps { gap: 1px; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-keycap {
+  min-width: 10px; height: 13px; padding: 0 2px; font-size: 7px;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-padhead { min-height: 30px; padding: 2px 5px 0; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-iconbutton {
+  width: 26px; height: 26px; padding: 5px; border-radius: 8px;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-padtools { gap: 5px; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-pads > .rb-aeshortcuts-footer,
+.rb-home-widget .rb-aeshortcuts-widget > .rb-aeshortcuts-footer { display: none; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-status { display: none; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-toolbar {
+  flex-direction: row; align-items: center; gap: 4px; padding: 2px 5px 4px;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-wgt-picksel {
+  flex: 0 1 46%; width: 46%; max-width: 46%; min-width: 0; height: 26px;
+  padding: 0 4px; font-size: calc(var(--rb-font-size) - 3px);
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-search {
+  flex: 1 1 auto; width: 100%; height: 30px; padding: 0 8px;
+  font-size: calc(var(--rb-font-size) - 1px);
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-grid {
+  flex: 1 1 auto; gap: 5px; padding: 0 5px 5px; overflow-y: auto;
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-search-result {
+  min-height: 52px; grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (max-height: 360px) {
+  .rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-padhead { min-height: 25px; }
+  .rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-iconbutton { width: 23px; height: 23px; padding: 4px; }
+  .rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-group-grid {
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr); gap: 3px;
+  }
+  .rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-button { gap: 1px; padding: 2px; }
+  .rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-icon { flex-basis: 11px; }
+  .rb-home-widget .rb-aeshortcuts-widget .rb-home-shortcut-icon svg { width: 12px; max-height: 11px; }
+}
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-row { min-height: 30px; grid-template-columns: minmax(0, 1fr) 22px; gap: 3px; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-run { min-height: 30px; gap: 4px; padding: 3px 5px; }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-verification { max-width: 52px; font-size: calc(var(--rb-font-size) - 5px); }
+.rb-home-widget .rb-aeshortcuts-widget .rb-aeshortcuts-pin { width: 22px; height: 22px; }
+.rb-home-widget .rb-aeshortcuts-footer { padding: 0 5px; }
+.rb-home-widget .rb-aeshortcuts-status { padding: 0 5px 3px; }
+.rb-aeshortcuts-full { min-height: 0; }
+.rb-aeshortcuts-full .rb-aeshortcuts-pads { max-height: 230px; overflow: hidden; }
+.rb-aeshortcuts-full .rb-aeshortcuts-padgrid { max-height: 170px; grid-auto-rows: minmax(64px, auto); }
+.rb-aeshortcuts-full .rb-home-shortcut-item { aspect-ratio: auto; min-height: 0; }
+.rb-aeshortcuts-full .rb-aeshortcuts-toolbar { flex-direction: row; }
+.rb-aeshortcuts-full .rb-wgt-picksel {
+  flex: 0 1 220px; min-width: 0; height: 28px; padding: 0 8px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  background: var(--rb-control); color: var(--rb-text); font: inherit;
+}
+.rb-aeshortcuts-full .rb-wgt-picksel { max-width: 220px; }
+.rb-aeshortcuts-full .rb-aeshortcuts-search { flex: 1 1 auto; }
+.rb-aeshortcuts-full .rb-aeshortcuts-grid { max-height: none; }
 /* A colour swatch IS the tile (Palette / Colour / Tag labels). */
 .rb-home-widget .rb-wgt-swatch {
   position: relative; min-width: 0; min-height: 0; padding: 0; cursor: pointer;
@@ -818,16 +944,405 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 }
 .rb-home-widget .rb-wgt-swatch:hover,
 .rb-home-widget .rb-wgt-swatch.is-active { box-shadow: 0 0 0 2px var(--rb-accent); }
-/* The Colour widget is an editable personal set: a dashed + tile to add, and in
-   edit mode each swatch is a real (invisible) colour input so the native picker
-   opens on click, plus a remove badge. */
-.rb-home-widget .rb-wgt-addtile { position: relative; border-style: dashed; color: var(--rb-text-faint); }
-.rb-home-widget .rb-wgt-addtile:hover { color: var(--rb-accent); border-color: var(--rb-accent); }
-.rb-home-widget .rb-wgt-addplus { font-size: 18px; line-height: 1; pointer-events: none; }
+/* The Colour widget is an editable personal set: the + action lives beside Done
+   in the edit bar, and swatches invoke After Effects' native colour dialog. */
 .rb-home-widget .rb-wgt-swatchedit { display: block; cursor: pointer; }
-.rb-home-widget .rb-wgt-cinput {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  margin: 0; padding: 0; border: 0; background: none; opacity: 0; cursor: pointer;
+.rb-home-widget .rb-wgt-color-grid {
+  justify-content: center;
+  align-content: center;
+  overflow: visible;
+  background: transparent;
+}
+.rb-home-widget .rb-wgt-color-grid .rb-wgt-swatch {
+  border-radius: var(--rb-radius-2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.rb-home-widget .rb-wgt-color-grid .rb-wgt-swatch:hover {
+  box-shadow: inset 0 0 0 2px var(--rb-accent);
+}
+.rb-home-widget .rb-wgt-gradient-grid {
+  justify-content: center;
+  align-content: center;
+  overflow: hidden;
+  background: transparent;
+}
+.rb-home-widget .rb-wgt-gradient-grid .rb-wgt-swatch {
+  border-radius: var(--rb-radius-2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.rb-home-widget .rb-wgt-gradient-grid .rb-wgt-swatch:hover {
+  box-shadow: inset 0 0 0 2px var(--rb-accent);
+}
+.rb-home-widget .rb-wgt-gradient-swatchedit { display: block; cursor: pointer; }
+
+.rb-aeshortcuts-padhead {
+  display: flex; flex: none; align-items: center; justify-content: space-between;
+  gap: 6px; min-width: 0; padding: 4px 7px 0;
+}
+.rb-aeshortcuts-padhelp {
+  min-width: 0; overflow: hidden; color: var(--rb-text-faint);
+  font-size: calc(var(--rb-font-size) - 2px); text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-aeshortcuts-padtools { display: flex; flex: none; align-items: center; gap: 4px; }
+.rb-aeshortcuts-iconbutton {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 6px;
+  border: 1px solid var(--rb-border-strong); border-radius: 9px;
+  background: linear-gradient(145deg, var(--rb-bg-raised), var(--rb-control));
+  color: var(--rb-text-muted); cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  transition: border-color var(--rb-transition), background var(--rb-transition),
+    color var(--rb-transition), transform var(--rb-transition), box-shadow var(--rb-transition);
+}
+.rb-aeshortcuts-iconbutton svg { width: 17px; height: 17px; }
+.rb-aeshortcuts-iconbutton:hover,
+.rb-aeshortcuts-iconbutton[aria-expanded="true"] {
+  border-color: var(--rb-accent); color: var(--rb-text);
+  box-shadow: 0 0 0 2px rgba(73, 144, 226, 0.18), 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+.rb-aeshortcuts-iconbutton:active { transform: translateY(1px); }
+.rb-aeshortcuts-menu { gap: 6px; }
+.rb-aeshortcuts-menu-item {
+  display: flex; align-items: center; width: 100%; min-height: 42px; padding: 8px 11px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: linear-gradient(145deg, var(--rb-bg-raised), var(--rb-control));
+  color: var(--rb-text); cursor: pointer; font: inherit; text-align: left;
+  transition: border-color var(--rb-transition), background var(--rb-transition),
+    transform var(--rb-transition), box-shadow var(--rb-transition);
+}
+.rb-aeshortcuts-menu-item:hover {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); transform: translateY(-1px);
+}
+.rb-aeshortcuts-menu-grid {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 2px 0; border-top: 1px solid var(--rb-border);
+  color: var(--rb-text-muted); font-size: 12px;
+}
+.rb-aeshortcuts-menu-grid .rb-aeshortcuts-columns { width: 76px; height: 30px; }
+.rb-aeshortcuts-help p { margin: 0; color: var(--rb-text-muted); line-height: 1.5; }
+.rb-aeshortcuts-manage {
+  height: 24px; padding: 0 7px; border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-1); background: var(--rb-control);
+  color: var(--rb-text-muted); cursor: pointer; font: inherit;
+  font-size: calc(var(--rb-font-size) - 2px);
+}
+.rb-aeshortcuts-manage:hover:not(:disabled) {
+  border-color: var(--rb-accent); background: var(--rb-control-hover); color: var(--rb-text);
+}
+.rb-aeshortcuts-manage:disabled { cursor: not-allowed; opacity: 0.5; }
+.rb-aeshortcuts-columns {
+  flex: none; width: 60px; min-width: 0; height: 24px; padding: 0 3px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  background: var(--rb-control); color: var(--rb-text-muted); font: inherit;
+  font-size: calc(var(--rb-font-size) - 3px);
+}
+.rb-aeshortcuts-padgrid {
+  display: flex; flex: 1 1 auto; flex-direction: column; gap: 8px;
+  min-width: 0; min-height: 0;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px;
+}
+.rb-home-shortcut-group { display: flex; flex: none; flex-direction: column; gap: 6px; min-width: 0; }
+.rb-home-shortcut-group-title {
+  flex: none; padding: 2px 3px; color: var(--rb-text-muted);
+  font-size: calc(var(--rb-font-size) - 2px); font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.rb-home-shortcut-group-grid {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-flow: row; grid-auto-rows: minmax(62px, auto);
+  justify-content: stretch; align-content: start; gap: 6px; min-width: 0; min-height: 0;
+}
+.rb-home-shortcut-item {
+  position: relative; display: flex; flex-direction: column;
+  min-width: 0; min-height: 0; height: 100%;
+}
+.rb-home-shortcut-item.is-editing { padding-top: 23px; }
+.rb-home-shortcut-button {
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  gap: 3px; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 7px 5px 6px;
+  border: 1px solid rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 0.42);
+  border-bottom: 3px solid rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 0.72);
+  border-radius: 12px;
+  background: linear-gradient(150deg,
+    rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 0.22), var(--rb-bg-raised) 72%);
+  color: var(--rb-text); cursor: pointer; font: inherit; text-align: center;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08),
+    0 4px 10px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 0.13);
+  transition: border-color var(--rb-transition), background var(--rb-transition),
+    box-shadow var(--rb-transition), transform var(--rb-transition), filter var(--rb-transition);
+}
+.rb-home-shortcut-button:hover:not(:disabled) {
+  border-color: var(--rb-accent); filter: brightness(1.08);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12),
+    0 0 0 2px rgba(73, 144, 226, 0.18), 0 7px 14px rgba(0, 0, 0, 0.2);
+}
+.rb-home-shortcut-button:active:not(:disabled) {
+  border-bottom-width: 1px; transform: translateY(2px);
+}
+.rb-home-shortcut-button:focus-visible {
+  outline: 2px solid var(--rb-accent); outline-offset: 2px;
+}
+.rb-home-shortcut-button:disabled { cursor: not-allowed; opacity: 0.76; }
+.rb-home-shortcut-button.is-selected,
+.rb-home-shortcut-item.is-editing .rb-home-shortcut-button {
+  border-color: var(--rb-accent);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12),
+    0 0 0 2px rgba(73, 144, 226, 0.2), 0 5px 13px rgba(0, 0, 0, 0.2);
+}
+.rb-home-shortcut-button.is-running,
+.rb-home-shortcut-button.is-sending {
+  border-color: var(--rb-accent); animation: rb-shortcut-pad-pulse 1.1s ease-in-out infinite alternate;
+}
+.rb-home-shortcut-button.is-running:disabled,
+.rb-home-shortcut-button.is-sending:disabled { cursor: progress; }
+.rb-home-shortcut-button.is-done {
+  border-color: var(--rb-success, #45b887);
+  box-shadow: inset 0 0 0 1px rgba(69, 184, 135, 0.22), 0 4px 12px rgba(69, 184, 135, 0.18);
+}
+.rb-home-shortcut-button.is-failed {
+  border-color: var(--rb-danger, #d66a72);
+  box-shadow: inset 0 0 0 1px rgba(214, 106, 114, 0.2), 0 4px 12px rgba(214, 106, 114, 0.16);
+}
+@keyframes rb-shortcut-pad-pulse {
+  from { box-shadow: 0 0 0 1px rgba(73, 144, 226, 0.12), 0 3px 8px rgba(0, 0, 0, 0.16); }
+  to { box-shadow: 0 0 0 3px rgba(73, 144, 226, 0.32), 0 5px 14px rgba(73, 144, 226, 0.18); }
+}
+.rb-home-shortcut-name {
+  display: block; width: 100%; min-width: 0; overflow: hidden;
+  color: var(--rb-text); font-size: calc(var(--rb-font-size) - 1px);
+  font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: normal;
+}
+.rb-home-shortcut-icon { display: flex; flex: 1 1 auto; align-items: center; justify-content: center; min-height: 0; color: rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 1); }
+.rb-home-shortcut-icon svg { width: min(48%, 40px); max-height: 42px; }
+.rb-home-shortcut-action {
+  display: block; max-width: 100%; overflow: hidden; padding: 2px 5px;
+  border: 1px solid rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 0.35);
+  border-radius: 999px; background: rgba(var(--rb-shortcut-pad-rgb, 88, 112, 148), 0.12);
+  color: var(--rb-text-muted); font-size: 9px; font-weight: 650;
+  line-height: 1.2; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-home-shortcut-button.is-running .rb-home-shortcut-action { color: var(--rb-accent); }
+.rb-home-shortcut-button.is-done .rb-home-shortcut-action { color: var(--rb-success, #45b887); }
+.rb-home-shortcut-button.is-failed .rb-home-shortcut-action { color: var(--rb-danger, #d66a72); }
+.rb-home-shortcut-keycaps { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px; min-width: 0; max-width: 100%; }
+.rb-home-shortcut-keycap {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  min-width: 12px; height: 16px; padding: 0 1px; overflow: hidden;
+  border: 1px solid var(--rb-border-strong); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--rb-bg-sunken); color: var(--rb-text-muted);
+  font: inherit; font-size: 7px; font-weight: 600; line-height: 1;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-home-shortcut-add {
+  align-items: center; justify-content: center;
+  border-style: dashed; border-color: var(--rb-border-strong);
+  background: linear-gradient(150deg, var(--rb-bg-sunken), var(--rb-bg-raised));
+  color: var(--rb-text-muted);
+}
+.rb-home-shortcut-add:hover:not(:disabled) { color: var(--rb-accent); }
+.rb-home-shortcut-add-icon { color: var(--rb-accent); font-size: 30px; font-weight: 300; line-height: 1; }
+.rb-home-shortcut-add .rb-home-shortcut-action { background: transparent; border-color: transparent; }
+.rb-home-shortcut-keyjoin { flex: none; color: var(--rb-text-faint); font-size: 8px; }
+.rb-home-shortcut-alternates { flex: none; color: var(--rb-text-faint); font-size: 8px; }
+.rb-home-shortcut-no-key { color: var(--rb-text-faint); font-size: 9px; }
+.rb-home-shortcut-status {
+  display: block; flex: none; min-width: 0; max-width: 100%; overflow: hidden;
+  color: var(--rb-danger); font-size: 8px; line-height: 1.2;
+  text-align: center; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-home-shortcut-status[hidden] { display: none; }
+.rb-home-shortcut-remove {
+  position: absolute; top: -6px; right: -6px; z-index: 2; width: 20px; height: 20px;
+  padding: 0; border: 1px solid var(--rb-bg); border-radius: 50%;
+  background: var(--rb-danger); color: #fff; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 18px;
+}
+.rb-home-shortcut-edit {
+  position: absolute; top: -6px; left: -6px; z-index: 2; min-width: 34px; height: 20px;
+  padding: 0 5px; border: 1px solid var(--rb-border-strong); border-radius: 999px;
+  background: var(--rb-bg-raised); color: var(--rb-text-muted); cursor: pointer;
+  font: inherit; font-size: 9px; line-height: 18px;
+}
+.rb-home-shortcut-edit:hover { border-color: var(--rb-accent); color: var(--rb-text); }
+.rb-home-shortcut-edittools {
+  display: flex; flex: none; align-items: center; justify-content: flex-end;
+  gap: 3px; width: 100%; min-width: 0;
+}
+.rb-home-shortcut-item.is-editing .rb-home-shortcut-edittools {
+  position: absolute; top: 0; right: 0; left: 0; z-index: 2;
+}
+.rb-home-shortcut-move {
+  flex: none; width: 22px; height: 20px; padding: 0;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  background: var(--rb-bg-raised); color: var(--rb-text-muted); cursor: pointer;
+  font: inherit; font-size: 12px; line-height: 18px;
+}
+.rb-home-shortcut-move:disabled { cursor: default; opacity: 0.4; }
+.rb-home-shortcut-edittools .rb-home-shortcut-edit,
+.rb-home-shortcut-edittools .rb-home-shortcut-remove {
+  position: static; inset: auto; flex: none; width: 22px; min-width: 22px; height: 20px;
+  padding: 0; border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  background: var(--rb-bg-raised); color: var(--rb-text-muted); line-height: 18px;
+}
+.rb-home-shortcut-edittools .rb-home-shortcut-edit { font-size: 8px; }
+.rb-home-shortcut-edittools .rb-home-shortcut-remove { font-size: 13px; }
+.rb-shortcut-pad-editor > select[aria-label="Pad action type"] { display: none; }
+.rb-shortcut-pad-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rb-shortcut-pad-choice {
+  min-width: 0; min-height: 38px; padding: 7px 10px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-2);
+  background: var(--rb-control); color: var(--rb-text-muted); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600;
+}
+.rb-shortcut-pad-choice:hover,
+.rb-shortcut-pad-choice.is-selected {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+  color: var(--rb-text);
+}
+.rb-shortcut-pad-editor .rb-shortcut-pad-action-fields > select,
+.rb-shortcut-pad-editor .rb-shortcut-pad-action-fields > input {
+  width: 100%; min-width: 0; height: 32px; padding: 0 8px;
+}
+.rb-shortcut-pad-preview {
+  display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 12px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised);
+}
+.rb-shortcut-pad-preview-icon {
+  display: flex; flex: none; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 12px;
+  border: 1px solid var(--rb-pad-preview-accent); background: var(--rb-bg);
+  color: var(--rb-pad-preview-accent);
+}
+.rb-shortcut-pad-preview-icon svg { width: 22px; height: 22px; }
+.rb-shortcut-pad-preview-copy { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
+.rb-shortcut-pad-preview-label { overflow: hidden; color: var(--rb-text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.rb-shortcut-pad-preview-chord { overflow: hidden; color: var(--rb-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.rb-shortcut-pad-advanced { padding: 8px 0; border-top: 1px solid var(--rb-border); }
+.rb-shortcut-pad-advanced summary { color: var(--rb-text-muted); cursor: pointer; font-size: 11px; }
+.rb-shortcut-pad-advanced > .rb-col { margin-top: 10px; }
+.rb-shortcut-pad-editor select:not([aria-label="Pad action type"]) { width: 100%; min-width: 0; height: 30px; padding: 0 7px; }
+.rb-shortcut-pad-editor { gap: 10px; }
+.rb-shortcut-pad-hotkey-editor {
+  display: flex; flex-direction: column; gap: 8px; padding: 9px 10px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised);
+}
+.rb-shortcut-pad-hotkey-row,
+.rb-shortcut-pad-hotkey-actions,
+.rb-shortcut-pad-collision-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px;
+}
+.rb-shortcut-pad-hotkey-row { justify-content: space-between; color: var(--rb-text-muted); font-size: 11px; }
+.rb-shortcut-pad-hotkey-hint { min-height: 1em; font-size: 10px; line-height: 1.4; }
+.rb-shortcut-pad-hotkey-editor .rb-btn,
+.rb-shortcut-pad-collision .rb-btn { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+.rb-shortcut-pad-collision {
+  display: flex; flex-direction: column; gap: 9px; padding: 10px;
+  border: 1px solid var(--rb-warning, #c89232); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised); color: var(--rb-text); font-size: 11px; line-height: 1.4;
+}
+.rb-shortcut-pad-collision[hidden] { display: none; }
+.rb-shortcut-pad-workflow-steps { display: flex; flex-direction: column; gap: 4px; }
+.rb-shortcut-pad-workflow-step {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-width: 0; padding: 5px 8px; border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-1); background: var(--rb-bg-raised); color: var(--rb-text-muted);
+  font-size: 11px;
+}
+.rb-shortcut-pad-workflow-step > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-shortcut-pad-editor > .rb-shortcut-pad-action-search {
+  width: 100%; min-width: 0; height: 36px; padding: 0 10px;
+}
+.rb-shortcut-pad-action-list {
+  display: flex; flex-direction: column; gap: 3px; min-height: 0;
+  max-height: min(260px, 34vh); overflow-y: auto; padding-right: 2px;
+}
+.rb-shortcut-pad-action {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; min-width: 0; min-height: 42px; padding: 7px 9px;
+  border: 1px solid transparent; border-radius: var(--rb-radius-2);
+  background: var(--rb-control); color: var(--rb-text); cursor: pointer;
+  font: inherit; text-align: left;
+}
+.rb-shortcut-pad-action:hover,
+.rb-shortcut-pad-action.is-selected {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+}
+.rb-shortcut-pad-action-main { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.rb-shortcut-pad-action-main strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.rb-shortcut-pad-action-category { overflow: hidden; color: var(--rb-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.rb-shortcut-pad-action-meta { display: flex; align-items: center; flex: none; gap: 7px; }
+.rb-shortcut-pad-action-status { color: var(--rb-text-muted); font-size: 10px; white-space: nowrap; }
+.rb-shortcut-pad-empty { padding: 12px 8px; text-align: center; }
+.rb-shortcut-pad-selected {
+  display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised);
+}
+.rb-shortcut-pad-selected-name { color: var(--rb-text); font-size: 12px; }
+.rb-shortcut-pad-selected-chord,
+.rb-shortcut-pad-selected-context,
+.rb-shortcut-pad-selected-status { color: var(--rb-text-muted); font-size: 10px; }
+.rb-shortcut-pad-preview {
+  width: 100%; min-height: 76px; flex: none; gap: 6px;
+  border-color: var(--rb-pad-preview-accent); opacity: 1; cursor: default;
+}
+.rb-shortcut-pad-preview-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid var(--rb-pad-preview-accent); color: var(--rb-pad-preview-accent);
+}
+.rb-shortcut-pad-preview-icon svg { width: 17px; height: 17px; }
+.rb-shortcut-pad-preview-chord { display: block; max-width: 100%; text-align: center; }
+.rb-home-shortcut-editor-row select { flex: 1 1 auto; min-width: 0; }
+.rb-home-shortcut-editor-row input[type="color"] { flex: none; }
+.rb-home-shortcut-editor-row input[type="color"] { flex: none; width: 40px; height: 30px; padding: 2px; }
+.rb-home-shortcut-editor-row { display: flex; align-items: center; gap: 8px; }
+.rb-home-shortcut-editor-row .rb-kbd { flex: 1 1 auto; min-width: 0; text-align: center; }
+.rb-shortcut-pad-chord-editor {
+  display: flex; flex-direction: column; gap: 8px; padding: 9px 10px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised);
+}
+.rb-shortcut-pad-chord-current,
+.rb-shortcut-pad-chord-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.rb-shortcut-pad-chord-current { color: var(--rb-text-muted); font-size: 11px; }
+.rb-shortcut-pad-recorded-chord { margin-left: auto; }
+.rb-shortcut-pad-chord-mode { width: 100%; font-size: 10px; }
+.rb-shortcut-pad-chord-actions .rb-btn { min-height: 26px; padding: 3px 7px; font-size: 10px; }
+.rb-shortcut-pad-chord-actions .rb-btn:last-child { margin-left: auto; }
+.rb-shortcut-pad-editor > input { width: 100%; min-width: 0; height: 30px; padding: 0 8px; }
+.rb-shortcut-pad-editor > .rb-faint { line-height: 1.4; }
+@media (max-width: 540px) {
+  .rb-home-shortcut-group-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.rb-shortcut-list-tools { display: flex; align-items: center; gap: 6px; }
+.rb-shortcut-list-tools select { flex: 1 1 auto; min-width: 0; }
+.rb-kbd-row .rb-shortcut-remove { flex: none; }
+.rb-home-widget .rb-wgt-editbar .rb-wgt-addbtn {
+  position: static; inset: auto; flex: none; width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin: 0; padding: 0; border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-1); background: var(--rb-control);
+  color: var(--rb-text-muted); opacity: 1; cursor: pointer;
+  font: inherit; font-size: 15px; line-height: 1;
+  transition: background var(--rb-transition), color var(--rb-transition), border-color var(--rb-transition);
+}
+.rb-home-widget .rb-wgt-editbar .rb-wgt-addbtn:hover:not(:disabled) {
+  color: var(--rb-text); border-color: var(--rb-accent); background: var(--rb-control-hover);
+}
+.rb-home-widget .rb-wgt-editbar .rb-wgt-addbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+.rb-home-widget .rb-wgt-editbar .rb-wgt-dropperbtn {
+  flex: none; height: 22px; padding: 0 7px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  background: var(--rb-control); color: var(--rb-text-muted); cursor: pointer;
+  font: inherit; font-size: calc(var(--rb-font-size) - 2px); line-height: 1;
+}
+.rb-home-widget .rb-wgt-editbar .rb-wgt-dropperbtn:hover {
+  color: var(--rb-text); border-color: var(--rb-accent); background: var(--rb-control-hover);
 }
 .rb-home-widget .rb-wgt-swx {
   position: absolute; top: 2px; right: 2px; z-index: 2; width: 15px; height: 15px;
@@ -850,8 +1365,9 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 .rb-home-widget .rb-wgt:hover .rb-wgt-fab,
 .rb-home-widget .rb-wgt-fab:focus-visible { opacity: 1; pointer-events: auto; }
 .rb-home-widget .rb-wgt-fab:hover { color: var(--rb-text); border-color: var(--rb-accent); }
-/* While editing, a clear bar above the grid: a label plus a solid Done button.
-   It has its own row so the exit never overlaps a swatch (one reliable click). */
+.rb-home-widget .rb-wgt-gradient-edit { z-index: 10; }
+/* While editing, a clear bar above the grid: a label, add action and solid Done
+   button. It has its own row so these controls never overlap a swatch. */
 .rb-home-widget .rb-wgt-editbar { flex: none; display: flex; align-items: center; gap: 6px; min-height: 0; padding: var(--rb-gap-2) var(--rb-gap-2) 0; }
 .rb-home-widget .rb-wgt-editlabel {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -890,6 +1406,374 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 }
 .rb-home-widget .rb-wgt-picksel:hover { border-color: var(--rb-accent); }
 .rb-home-widget .rb-wgt-picksel:focus { outline: none; border-color: var(--rb-accent); }
+
+/* ---- Shortcut Pad widget ----------------------------------------------- */
+.rb-shortcut-pad-widget {
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+  width: 100%; min-width: 0; min-height: 0; overflow: hidden;
+}
+.rb-shortcut-pad-header {
+  display: flex; flex: none; align-items: center; justify-content: space-between;
+  gap: 8px; min-width: 0; min-height: 32px; padding: 0 2px;
+}
+.rb-shortcut-pad-title {
+  overflow: hidden; color: var(--rb-text); font-size: 14px;
+  font-weight: 700; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-tools { display: flex; flex: none; align-items: center; gap: 5px; }
+.rb-shortcut-pad-done {
+  min-height: 29px; padding: 4px 11px; border: 1px solid var(--rb-accent);
+  border-radius: 7px; background: var(--rb-accent); color: #fff;
+  cursor: pointer; font: inherit; font-size: 13px; font-weight: 650;
+}
+.rb-shortcut-pad-done:hover { filter: brightness(1.06); }
+.rb-shortcut-pad-done:focus-visible { outline: 2px solid var(--rb-accent); outline-offset: 2px; }
+.rb-shortcut-pad-tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 27px; height: 27px; padding: 5px; border: 1px solid var(--rb-border-strong);
+  border-radius: 8px; background: var(--rb-control);
+  color: var(--rb-text-muted); cursor: pointer;
+  transition: color var(--rb-transition), border-color var(--rb-transition),
+    background var(--rb-transition), transform var(--rb-transition);
+}
+.rb-shortcut-pad-tool svg { width: 16px; height: 16px; }
+.rb-shortcut-pad-tool:hover,
+.rb-shortcut-pad-widget.is-editing .rb-shortcut-pad-tool[aria-label="Shortcut Pad menu"] {
+  border-color: var(--rb-accent); color: var(--rb-text); background: var(--rb-control-hover);
+}
+.rb-shortcut-pad-tool:active { transform: translateY(1px); }
+.rb-shortcut-pad-repair-notice {
+  min-width: 0; max-width: 180px; overflow: hidden; padding: 0 8px;
+  border: 1px solid var(--rb-border); border-radius: 6px;
+  background: var(--rb-bg-sunken); color: var(--rb-text-muted);
+  cursor: pointer; font: inherit; font-size: 10px; line-height: 24px;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-repair-notice:hover,
+.rb-shortcut-pad-repair-notice:focus-visible {
+  border-color: var(--rb-accent); color: var(--rb-text);
+}
+.rb-shortcut-pad-add-full {
+  flex: none; height: 26px; padding: 0 9px;
+  border: 1px solid var(--rb-border); border-radius: 6px;
+  background: var(--rb-bg-raised); color: var(--rb-text-muted);
+  cursor: pointer; font: inherit; font-size: 10px; font-weight: 600;
+}
+.rb-shortcut-pad-add-full:hover,
+.rb-shortcut-pad-add-full:focus-visible {
+  border-color: var(--rb-accent); color: var(--rb-text);
+}
+.rb-shortcut-pad-grid {
+  display: grid; flex: none; align-self: stretch;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-flow: row; grid-auto-rows: 92px; justify-content: start;
+  align-content: start; gap: 8px;
+  width: 100%; min-width: 0; min-height: 0; padding: 12px;
+  overflow: hidden; contain: layout paint;
+}
+.rb-shortcut-pad-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; min-width: 0; min-height: 92px;
+  aspect-ratio: 1 / 1; padding: 10px 8px;
+  overflow: hidden; border: 1px solid var(--rb-border-strong);
+  border-bottom: 2px solid rgba(var(--rb-accent-rgb), 0.42);
+  border-radius: 8px; background: var(--rb-bg-raised);
+  color: var(--rb-text); cursor: pointer; font: inherit; text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  transition: border-color var(--rb-transition), background var(--rb-transition),
+    color var(--rb-transition), box-shadow var(--rb-transition), transform var(--rb-transition);
+}
+.rb-shortcut-pad-cell:hover:not(:disabled) {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.2); transform: translateY(-1px);
+}
+.rb-shortcut-pad-cell:active:not(:disabled) {
+  transform: translateY(1px); box-shadow: none;
+}
+.rb-shortcut-pad-cell:focus-visible,
+.rb-shortcut-pad-tool:focus-visible {
+  outline: 2px solid var(--rb-accent); outline-offset: 1px;
+}
+.rb-shortcut-pad-cell.is-empty {
+  border-style: dashed; border-bottom-width: 1px; background: var(--rb-bg-sunken);
+  color: var(--rb-text-muted); box-shadow: none;
+}
+.rb-shortcut-pad-cell.is-empty:hover { border-style: solid; color: var(--rb-text); }
+.rb-shortcut-pad-cell.is-editing { cursor: grab; border-style: dashed; }
+.rb-shortcut-pad-cell.is-selected { border-color: var(--rb-accent); }
+.rb-shortcut-pad-cell.is-dragging { opacity: 0.45; }
+.rb-shortcut-pad-cell.is-drop-target {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+}
+.rb-shortcut-pad-cell.is-running {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+}
+.rb-shortcut-pad-cell.is-unavailable {
+  border-color: var(--rb-border); border-bottom-color: var(--rb-border-strong);
+  background: var(--rb-bg-sunken); color: var(--rb-text-muted); box-shadow: none;
+}
+.rb-shortcut-pad-cell.is-failed { border-color: var(--rb-danger, #d66a72); }
+.rb-shortcut-pad-cell:disabled { cursor: progress; }
+.rb-shortcut-pad-action-name {
+  max-width: 100%; overflow: hidden; color: var(--rb-text-faint);
+  font-size: clamp(9px, 1.2vw, 11px); font-weight: 550; line-height: 1.15;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-unavailable {
+  max-width: 100%; overflow: hidden; color: var(--rb-text-faint);
+  font-size: 9px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-label {
+  display: block; max-width: 100%; overflow: hidden;
+  color: inherit; font-size: 12px; font-weight: 650;
+  line-height: 1.15; overflow-wrap: normal; word-break: normal;
+  hyphens: none; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-chord {
+  display: block; max-width: 100%; overflow: hidden;
+  color: var(--rb-text-muted); font-size: clamp(8px, 2.5vw, 10px);
+  font-weight: 550; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-run-status {
+  position: absolute; right: 3px; bottom: 2px; max-width: calc(100% - 6px);
+  overflow: hidden; color: var(--rb-text-muted); font-size: 8px;
+  line-height: 1.1; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-run-status[hidden] { display: none; }
+.rb-shortcut-pad-cell.is-running .rb-shortcut-pad-run-status { color: var(--rb-accent); }
+.rb-shortcut-pad-cell.is-failed .rb-shortcut-pad-run-status { color: var(--rb-danger, #d66a72); }
+.rb-shortcut-pad-add-mark {
+  color: var(--rb-accent); font-size: clamp(16px, 4vw, 20px); line-height: 1;
+}
+.rb-shortcut-pad-add-label {
+  max-width: 100%; overflow: hidden; color: var(--rb-text); font-size: 10px;
+  font-weight: 600; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-slot-picker { margin-top: 8px; }
+
+.rb-modal-shortcut-pad-menu .rb-modal-body { padding: 12px; }
+.rb-shortcut-pad-menu { display: flex; flex-direction: column; gap: 6px; }
+.rb-shortcut-pad-menu-item {
+  display: flex; align-items: center; width: 100%; min-height: 42px; padding: 8px 11px;
+  border: 1px solid var(--rb-border); border-radius: var(--rb-radius-2);
+  background: linear-gradient(145deg, var(--rb-bg-raised), var(--rb-control));
+  color: var(--rb-text); cursor: pointer; font: inherit; text-align: left;
+  transition: border-color var(--rb-transition), background var(--rb-transition),
+    transform var(--rb-transition), box-shadow var(--rb-transition);
+}
+.rb-shortcut-pad-menu-item:hover {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); transform: translateY(-1px);
+}
+.rb-shortcut-pad-confirm-copy {
+  margin: 0; color: var(--rb-text-muted); font-size: 12px; line-height: 1.5;
+}
+.rb-shortcut-pad-slot-flow { display: flex; flex-direction: column; gap: 6px; }
+.rb-shortcut-pad-confirm { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.rb-shortcut-pad-clear { margin-right: auto; }
+.rb-shortcut-pad-editor { display: flex; flex-direction: column; gap: 18px; }
+.rb-shortcut-pad-field,
+.rb-shortcut-pad-action-field,
+.rb-shortcut-pad-hotkey-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rb-shortcut-pad-field-label {
+  color: var(--rb-text); font-size: 12px; font-weight: 650;
+}
+.rb-shortcut-pad-name,
+.rb-shortcut-pad-action-search,
+.rb-shortcut-library-search {
+  width: 100%; min-width: 0; height: 38px; padding: 0 11px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg); color: var(--rb-text); font: inherit;
+}
+.rb-shortcut-pad-name:focus,
+.rb-shortcut-pad-action-search:focus,
+.rb-shortcut-library-search:focus { outline: none; border-color: var(--rb-accent); }
+.rb-shortcut-pad-helper { color: var(--rb-text-muted); font-size: 11px; line-height: 1.4; }
+.rb-shortcut-pad-action-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 48px; padding: 8px 10px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised);
+}
+.rb-shortcut-pad-action-copy {
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+}
+.rb-shortcut-pad-selected-action {
+  overflow: hidden; color: var(--rb-text); font-size: 15px; font-weight: 700;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-pad-action-path,
+.rb-shortcut-pad-action-default {
+  color: var(--rb-text-muted); font-size: 12px; line-height: 1.4;
+}
+.rb-shortcut-pad-action-default.is-unavailable { color: var(--rb-text-faint); }
+.rb-shortcut-pad-action-change { flex: none; min-height: 29px; }
+.rb-shortcut-pad-record-hint {
+  min-height: 1em; color: var(--rb-text-muted); font-size: 11px; line-height: 1.4;
+}
+.rb-shortcut-pad-shortcut-value {
+  display: flex; align-items: center; min-width: 0; min-height: 38px;
+}
+.rb-shortcut-pad-hotkey-value {
+  display: inline-flex; align-items: center; min-height: 36px; max-width: 100%;
+  padding: 6px 11px; border: 1px solid var(--rb-border-strong);
+  border-radius: 7px; background: var(--rb-bg-sunken); color: var(--rb-text);
+  font-size: 15px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere;
+}
+.rb-shortcut-pad-hotkey-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.rb-shortcut-pad-hotkey-actions .rb-btn { min-height: 28px; }
+.rb-shortcut-pad-action-browser { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.rb-shortcut-pad-action-suggestions { display: flex; flex-direction: column; gap: 10px; }
+.rb-shortcut-pad-action-suggestion-group { display: flex; flex-direction: column; gap: 6px; }
+.rb-shortcut-pad-action-suggestion-grid {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.rb-shortcut-pad-action-suggestion {
+  min-height: 29px; padding: 4px 9px; border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-2); background: var(--rb-control);
+  color: var(--rb-text); cursor: pointer; font: inherit; font-size: 12px;
+}
+.rb-shortcut-pad-action-choice,
+.rb-shortcut-pad-replace-choice {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+  width: 100%; min-width: 0; min-height: 48px; padding: 8px 10px;
+  border: 1px solid transparent; border-bottom-color: var(--rb-border);
+  border-radius: var(--rb-radius-2);
+  background: var(--rb-control); color: var(--rb-text); cursor: pointer;
+  font: inherit; text-align: left;
+}
+.rb-shortcut-pad-action-choice:hover,
+.rb-shortcut-pad-replace-choice:hover:not(:disabled),
+.rb-shortcut-pad-action-suggestion:hover {
+  border-color: var(--rb-accent); background: var(--rb-control-hover);
+}
+.rb-shortcut-pad-action-choice-name { color: var(--rb-text); font-size: 13px; font-weight: 650; }
+.rb-shortcut-pad-action-choice-path { color: var(--rb-text-muted); font-size: 11px; }
+.rb-shortcut-pad-action-choice-chord { color: var(--rb-text); font-size: 12px; font-weight: 600; }
+.rb-shortcut-pad-empty-choice { padding: 10px; color: var(--rb-text-muted); font-size: 11px; }
+.rb-shortcut-pad-save-error {
+  margin: 0; padding: 8px 10px; border: 1px solid var(--rb-danger, #d66a72);
+  border-radius: var(--rb-radius-2); color: var(--rb-danger, #d66a72);
+  font-size: 12px; line-height: 1.4;
+}
+.rb-shortcut-pad-save-conflict {
+  display: flex; flex-direction: column; gap: 8px; padding: 9px 10px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-raised); color: var(--rb-text-muted); font-size: 12px;
+}
+.rb-shortcut-pad-save-conflict[hidden] { display: none; }
+.rb-shortcut-pad-conflict-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.rb-modal-shortcut-pad { max-height: min(760px, calc(100vh - 32px)); }
+.rb-modal-shortcut-pad .rb-modal-body { min-height: 0; overflow: auto; }
+.rb-hotkey-builder { display: flex; flex-direction: column; gap: 11px; min-width: 0; }
+.rb-hotkey-preview {
+  display: flex; align-items: center; justify-content: center; min-height: 68px;
+  padding: 12px; border: 1px solid var(--rb-border-strong); border-radius: 12px;
+  background: linear-gradient(145deg, var(--rb-bg-raised), var(--rb-bg-sunken));
+  color: var(--rb-text); font-size: clamp(17px, 4vw, 24px); font-weight: 750;
+  line-height: 1.2; text-align: center; overflow-wrap: anywhere;
+}
+.rb-hotkey-capture-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+.rb-hotkey-main-key {
+  min-width: 0; min-height: 46px; padding: 7px 10px;
+  border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-2);
+  background: var(--rb-bg-sunken); color: var(--rb-text); cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 650; text-align: left;
+}
+.rb-hotkey-main-key:focus-visible,
+.rb-hotkey-modifier:focus-visible,
+.rb-hotkey-key-category:focus-visible,
+.rb-hotkey-key:focus-visible {
+  outline: 2px solid var(--rb-accent); outline-offset: 1px;
+}
+.rb-hotkey-clear { min-height: 46px; }
+.rb-hotkey-modifiers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.rb-hotkey-modifier {
+  min-height: 34px; border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-2); background: var(--rb-control);
+  color: var(--rb-text-muted); cursor: pointer; font: inherit; font-size: 11px;
+  font-weight: 700;
+}
+.rb-hotkey-modifier.is-active {
+  border-color: var(--rb-accent); background: rgba(var(--rb-accent-rgb), 0.18);
+  color: var(--rb-text);
+}
+.rb-hotkey-picker { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.rb-hotkey-key-categories { display: flex; gap: 5px; overflow-x: auto; padding: 1px 1px 4px; }
+.rb-hotkey-key-category {
+  flex: none; min-height: 28px; padding: 4px 8px; border: 1px solid var(--rb-border);
+  border-radius: 999px; background: var(--rb-control); color: var(--rb-text-muted);
+  cursor: pointer; font: inherit; font-size: 10px; font-weight: 650;
+}
+.rb-hotkey-key-category.is-active {
+  border-color: var(--rb-accent); background: rgba(var(--rb-accent-rgb), 0.16);
+  color: var(--rb-text);
+}
+.rb-hotkey-key-panels {
+  max-height: min(170px, 24vh); min-height: 0; overflow: auto;
+  padding: 1px 2px 3px 1px;
+}
+.rb-hotkey-key-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 5px; }
+.rb-hotkey-key {
+  min-width: 0; min-height: 31px; padding: 4px 5px;
+  border: 1px solid var(--rb-border); border-radius: 7px;
+  background: var(--rb-bg-raised); color: var(--rb-text); cursor: pointer;
+  font: inherit; font-size: 10px; font-weight: 600; overflow-wrap: anywhere;
+}
+.rb-hotkey-key:hover,
+.rb-hotkey-key-category:hover,
+.rb-hotkey-modifier:hover { border-color: var(--rb-accent); color: var(--rb-text); }
+.rb-hotkey-conflict {
+  display: flex; flex-direction: column; gap: 4px; padding: 9px 10px;
+  border: 1px solid var(--rb-danger, #d66a72); border-radius: var(--rb-radius-2);
+  background: rgba(214, 106, 114, 0.1); color: var(--rb-text); font-size: 11px;
+}
+.rb-hotkey-conflict > span { color: var(--rb-text-muted); line-height: 1.4; }
+.rb-hotkey-hint { margin: 0; color: var(--rb-text-faint); font-size: 10px; line-height: 1.4; }
+
+.rb-modal-shortcut-library { max-height: min(680px, calc(100vh - 32px)); }
+.rb-modal-shortcut-library .rb-modal-body {
+  display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden;
+}
+.rb-shortcut-library { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.rb-shortcut-library-results {
+  display: flex; flex-direction: column; gap: 5px; min-height: 0;
+  max-height: min(520px, 58vh); overflow: auto; padding-right: 2px;
+}
+.rb-shortcut-library-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-2); background: var(--rb-bg-raised);
+}
+.rb-shortcut-library-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rb-shortcut-library-label {
+  overflow: hidden; color: var(--rb-text); font-size: 12px; font-weight: 650;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-shortcut-library-chord {
+  color: var(--rb-text-faint); font-size: 10px; line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.rb-shortcut-library-actions {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px;
+}
+.rb-shortcut-library-action { min-height: 27px; padding: 4px 7px; white-space: nowrap; }
+.rb-shortcut-library-empty { padding: 18px 8px; color: var(--rb-text-muted); text-align: center; }
+.rb-shortcut-pad-menu-item:focus-visible,
+.rb-shortcut-pad-action-choice:focus-visible,
+.rb-shortcut-pad-replace-choice:focus-visible,
+.rb-shortcut-library-action:focus-visible {
+  outline: 2px solid var(--rb-accent); outline-offset: 1px;
+}
+.rb-shortcut-pad-widget [hidden],
+.rb-modal-shortcut-pad [hidden],
+.rb-modal-shortcut-library [hidden] { display: none !important; }
+@media (max-width: 520px) {
+  .rb-shortcut-library-row { grid-template-columns: minmax(0, 1fr); }
+  .rb-shortcut-library-actions { justify-content: flex-start; }
+}
+
 /* Edge-to-edge: the box IS the widget, so drop its own frame and rounding. */
 .rb-home-widget.is-filled .rb-anchor-box { height: 100%; max-height: none; aspect-ratio: auto; width: 100%; border: 0; border-radius: 0; }
 /* Preview graphs stretch to fill the widget width (no letterboxed empty space);
@@ -1006,7 +1890,7 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 .rb-home.is-editing .rb-home-sizectl { display: inline-flex; }
 .rb-home-sizectl .rb-faint { font-size: calc(var(--rb-font-size) - 2px); white-space: nowrap; }
 .rb-home-sizebtn {
-  width: 19px; height: 17px; border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
+  width: var(--rb-control-h-compact); height: var(--rb-control-h-compact); border: 1px solid var(--rb-border-strong); border-radius: var(--rb-radius-1);
   background: transparent; color: var(--rb-text-muted); cursor: pointer; font: inherit; font-size: 10px;
   transition: color var(--rb-transition), border-color var(--rb-transition);
 }
@@ -1015,7 +1899,7 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
 /* A text button (e.g. "Auto") sizes to its label instead of a fixed square. */
 .rb-home-autobtn { width: auto; min-width: 0; padding: 0 6px; }
 /* Board accent picker in the edit bar, and the per-widget colour swatch. */
-.rb-home-boardcolor { width: 22px; height: 17px; }
+.rb-home-boardcolor { width: var(--rb-control-h-compact); height: var(--rb-control-h-compact); }
 .rb-home-wcolor {
   width: 24px; height: 24px; padding: 0; flex: none; cursor: pointer;
   border: 1px solid var(--rb-border-strong); border-radius: 999px; background: none;
@@ -1152,3 +2036,13 @@ body.rb-home-grabbing, body.rb-home-grabbing * { cursor: grabbing !important; }
   background: none; border: 1px solid transparent; color: var(--rb-text-muted); font-size: 14px; line-height: 1;
 }
 .rb-kb-clr:hover { color: var(--rb-text); border-color: var(--rb-border); }
+
+@media (max-width: 430px) {
+  .rb-home { padding: var(--rb-gap-2); }
+  .rb-home-grid { --rb-home-gap: 6px; }
+  .rb-home-head { gap: 1px; }
+  .rb-home-head .rb-btn.is-icon { width: 28px; height: 28px; }
+  .rb-home-head .rb-btn.is-icon svg { width: 16px; height: 16px; }
+  .rb-home-tabs { max-width: 100%; }
+  .rb-home-tab { min-height: 28px; padding-right: 8px; padding-left: 8px; }
+}

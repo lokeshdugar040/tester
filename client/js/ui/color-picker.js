@@ -207,23 +207,6 @@
     // the one addEventListener used (a mismatched flag silently leaks the
     // document-level handler for the life of the panel).
     var offDocDown = on(document, 'pointerdown', onDocDown, false);
-    // Escape closes the popup before anything else reacts: the shell's Escape
-    // navigates Home and a modal's Escape closes the dialog, so the picker
-    // must be the first responder while its popup is the top layer (capture
-    // phase + stopImmediatePropagation). When a modal overlay is stacked
-    // above us and the popup is not inside it, stay quiet so the dialog
-    // closes first instead.
-    function onKey(e) {
-      if (!open || e.key !== 'Escape') return;
-      var overlay = document.querySelector('.rb-modal-overlay');
-      if (overlay && !overlay.contains(pop)) return;
-      closePopup(true);
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-    }
-    var offKey = on(document, 'keydown', onKey, true);
-
     paint();
     var api = {
       el: root,
@@ -244,7 +227,6 @@
       editing: function () { return !!(dragPainting || pending !== null); },
       destroy: function () {
         offDocDown();
-        offKey();
         var i = LIVE.indexOf(api); if (i !== -1) LIVE.splice(i, 1);
       }
     };

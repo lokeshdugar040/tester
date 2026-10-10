@@ -32,7 +32,7 @@
   --rb-bg-raised-rgb: 47,48,52;
   --rb-bg-sunken-rgb: 23,24,27;
   --rb-success-rgb: 92,184,120;
-  --rb-font-size: 11px;
+  --rb-font-size: 12px;
 
   /* Spacing + radius scale (original Rebound design language). */
   --rb-gap-1: 2px;
@@ -41,11 +41,20 @@
   --rb-gap-4: 12px;
   --rb-gap-5: 16px;
   --rb-gap-6: 24px;
-  --rb-radius-1: 3px;
-  --rb-radius-2: 5px;
-  --rb-radius-3: 8px;
+  --rb-radius-1: 4px;
+  --rb-radius-2: 7px;
+  --rb-radius-3: 10px;
   --rb-radius-pill: 999px;
-  --rb-control-h: 24px;
+  --rb-radius: var(--rb-radius-2);
+  --rb-control-h: 28px;
+  --rb-control-h-compact: 24px;
+  --rb-control-h-comfortable: 32px;
+  --rb-home-min-cell: 72px;
+  --rb-surface-page: var(--rb-bg);
+  --rb-surface-card: var(--rb-bg-raised);
+  --rb-surface-inset: var(--rb-bg-sunken);
+  --rb-stroke: var(--rb-border);
+  --rb-stroke-strong: var(--rb-border-strong);
 
   /* Motion tokens: one buttery scale used everywhere. Durations by weight,
      easings by intent (Material-standard for moves, decel for arrivals, accel
@@ -65,6 +74,13 @@
 
 * {
   box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 html,
@@ -101,6 +117,12 @@ h1, h2, h3, h4, p {
 a {
   color: var(--rb-accent);
   text-decoration: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--rb-text-faint);
+  opacity: 1;
 }
 
 /* Headings / section labels */
