@@ -439,6 +439,45 @@ describe('Shortcut Pad widget editing', () => {
       .toBe('Add Shortcut');
   });
 
+  it('packs sparse pins top-left with no blank or trailing add cells in normal mode', () => {
+    const actions = [0, 1, 2].map((index) => ({
+      id: 'ae.sparse-' + index,
+      label: 'Sparse ' + index,
+      commandName: 'Sparse ' + index,
+      menuPath: 'Test \u203a Sparse ' + index,
+      commandId: 4100 + index,
+      commandIdSource: 'verified-host-probe',
+      commandActionId: 'ae-sparse-' + index,
+      deliveryRoute: 'host-command',
+      aeMapShortcut: true,
+      aeVersion: '26.5x89',
+      commandRequest: {
+        commandActionId: 'ae-sparse-' + index,
+        commandId: 4100 + index,
+        commandIdSource: 'verified-host-probe',
+        preferredRoute: 'host-command'
+      }
+    }));
+    const runtime = createRuntime({
+      actions,
+      initialPads: [0, 5, 20].map((slot, index) => ({
+        id: 'pin-sparse-' + index,
+        label: 'Sparse ' + index,
+        actionId: actions[index].id,
+        pinnedSlot: slot
+      }))
+    });
+    const cells = allElements(runtime.getGrid(), (node) =>
+      node.tagName === 'BUTTON' && node.getAttribute('data-slot') !== null);
+    expect(cells).toHaveLength(3);
+    expect(cells.some((cell) => cell.classList.contains('is-empty'))).toBe(false);
+    expect(cells.map((cell) => cell.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Sparse 0'),
+        expect.stringContaining('Sparse 1'), expect.stringContaining('Sparse 2')]));
+    expect(allElements(runtime.getGrid(), (node) =>
+      node.classList.contains('rb-shortcut-pad-add-mark'))).toHaveLength(0);
+  });
+
   it('renders a full pad as a compact 6 by 6 grid with no empty cards', () => {
     const actions = Array.from({ length: 36 }, (_value, slot) => {
       const actionId = 'ae.action-' + slot;
