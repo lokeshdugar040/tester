@@ -545,11 +545,13 @@ describe('central action router', () => {
     const requests = calls.filter((call) => call.method === 'aeShortcut.executeRequest')
       .map((call) => call.args.request);
 
+    // The host rejected the stale request before executeCommand ran: a visible
+    // failure, one background refresh, and no automatic re-dispatch.
     expect(result).toMatchObject({
       actionId: 'ae.redo',
       pinId: 'pin-redo',
-      state: 'Unsupported',
-      pinStatus: 'unavailable'
+      state: 'Failed',
+      ok: false
     });
     expect(calls).toContainEqual({ refreshActiveKeymap: true });
     expect(requests).toHaveLength(1);
@@ -559,6 +561,13 @@ describe('central action router', () => {
       commandId: 2371
     });
     expect(requests[0].requestId).toBeTruthy();
+    expect(dispatchCount).toBe(1);
+
+    // The next activation sees the refreshed command ID differs from the pin
+    // and reports the pin as needing repair, without dispatching anything.
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 130));
+    const second = await api.executePin('pin-redo', { kind: 'shortcut-pad' });
+    expect(second).toMatchObject({ state: 'Unsupported', pinStatus: 'unavailable' });
     expect(dispatchCount).toBe(1);
   });
 

@@ -383,6 +383,30 @@
     return request;
   }
 
+  // Last check before the AE bridge. Only a real, numeric, verified AE command
+  // with a non-empty request ID may cross it. Pin IDs, sample IDs, slot
+  // numbers, labels, menu paths, and key strings are all refused here.
+  function assertHostCommandRequest(request) {
+    if (!request || typeof request.requestId !== 'string' || !request.requestId) {
+      throw new Error('The shortcut request has no request ID.');
+    }
+    if (typeof request.commandId !== 'number' || !isFinite(request.commandId) ||
+        request.commandId <= 0 || Math.floor(request.commandId) !== request.commandId) {
+      throw new Error('The shortcut has no verified After Effects command ID.');
+    }
+    if (request.commandIdSource !== 'verified-host-probe') {
+      throw new Error('The After Effects command ID was not verified.');
+    }
+    if (typeof request.commandActionId !== 'string' ||
+        !/^ae-[a-z0-9-]+$/.test(request.commandActionId)) {
+      throw new Error('The shortcut does not name a registered After Effects command.');
+    }
+    if (request.preferredRoute !== 'host-command') {
+      throw new Error('The shortcut request used an unsupported route.');
+    }
+    return true;
+  }
+
   function executeRoute(action, route, source, state) {
     if (route === 'open-tool') {
       if (source.pinId) tracePin('Action dispatched', action, source.requestId, { route: route });
@@ -398,12 +422,14 @@
     if (route === 'custom-workflow') return executeWorkflow(action, source);
     if (route === 'host-command' ||
         route === 'bridge-jsx' && action.commandRequest) {
+      var hostRequest = freshRequest(action, route, state, source.requestId);
+      if (route === 'host-command') assertHostCommandRequest(hostRequest);
       if (source.pinId) tracePin('Action dispatched', action, source.requestId, {
         route: route,
         executionRoute: route
       });
       return R.bridge.invoke('aeShortcut.executeRequest', {
-        request: freshRequest(action, route, state, source.requestId)
+        request: hostRequest
       });
     }
     if (route === 'bridge-jsx') {
@@ -684,11 +710,17 @@
         var delivered = !!(execution && execution.delivered === true);
         var executed = !!(execution && execution.executed === true);
         var opened = route === 'open-tool' && !!(execution && execution.opened);
-        var ok = verified || opened;
+        // A pin is a real AE command. When the host accepted and executed it
+        // without throwing, that is a dispatched success; a missing
+        // postcondition is not a failure. Only host errors are failures.
+        var dispatched = !!(source.pinId && route === 'host-command' && executed &&
+          execution.ok !== false && execution.contextVerified === true);
+        var ok = verified || opened || dispatched;
         var state = ok ? 'Done' : (execution && execution.ok === false
           ? 'Failed' : 'Ready');
         var message = opened ? action.label + ' opened.'
           : verified ? execution.result || action.label + ' completed.'
+            : dispatched ? action.label + ' sent to After Effects.'
             : execution && execution.error
               ? String(execution.error)
               : !verified
@@ -702,6 +734,7 @@
           delivered: delivered,
           executed: executed || opened,
           verified: verified || opened,
+          dispatched: dispatched,
           contextVerified: execution && execution.contextVerified === true,
           requestId: execution && execution.requestId || source.requestId ||
             action.commandRequest && action.commandRequest.requestId || '',
@@ -779,72 +812,39 @@
     return /no longer matches the active AE keymap|stale.{0,24}keymap/i.test(detail);
   }
 
-  function mappingUnavailable(actionId, source, previous) {
-    var result = copy(previous);
-    result.actionId = actionId;
-    result.ok = false;
-    result.state = 'Unsupported';
-    result.route = result.route || 'unsupported';
-    result.routeAvailable = false;
-    result.delivered = false;
-    result.executed = false;
-    result.verified = false;
-    result.contextVerified = false;
-    result.userMessage = 'Mapping unavailable — assign an action or check AE keymap.';
-    result.error = 'The active shortcut mapping could not be refreshed.';
-    if (!result.source) result.source = source.kind;
-    return result;
-  }
-
-  function refreshForActivation(actionId, forceHostRefresh) {
-    var needsRefresh = /^pad:/.test(actionId) || /^ae\.map\./.test(actionId);
-    var action = resolveAction(actionId);
-    needsRefresh = needsRefresh || !!(action &&
-      (action.aeMapShortcut || action.registeredFallback));
+  function refreshForActivation(actionId) {
     var shortcuts = R.afterEffectsShortcuts;
-    if (!needsRefresh || !shortcuts || !shortcuts.refreshActiveKeymap) {
+    if (!shortcuts || typeof shortcuts.refreshActiveKeymap !== 'function') {
+      return Promise.resolve();
+    }
+    if (typeof shortcuts.keymapLoaded === 'function' && shortcuts.keymapLoaded()) {
       return Promise.resolve();
     }
     return Promise.resolve().then(function () {
-      return shortcuts.refreshActiveKeymap(forceHostRefresh === true);
+      return shortcuts.refreshActiveKeymap(false);
     });
   }
 
   function executeFreshAction(actionId, inputSource) {
     var source = sourceFor(inputSource);
     if (source.error) return executeAction(actionId, inputSource);
-
-    function run(attempt) {
-      return refreshForActivation(actionId, attempt > 0).then(function () {
-        return executeAction(actionId, source);
-      }).then(function (result) {
-        if (!staleKeymapResult(result)) return result;
-        if (attempt < 1) {
-          if (R.log) R.log.warn('Shortcut mapping changed during execution; refreshing once.', {
-            actionId: actionId,
-            requestId: result.requestId
-          });
-          return run(attempt + 1);
-        }
-        if (R.log) R.log.warn('Shortcut mapping remained stale after one refresh retry.', {
-          actionId: actionId,
-          requestId: result.requestId
-        });
-        return mappingUnavailable(actionId, source, result);
-      }).catch(function (error) {
-        var action = resolveAction(actionId);
-        if (action && action.registeredFallback && !action.aeMapShortcut) {
-          return executeAction(actionId, source);
-        }
-        if (R.log) R.log.warn('Could not refresh the active shortcut mapping.', error);
-        return resultFor(actionId, source, 'Unsupported', 'unsupported', {
-          userMessage: 'Mapping unavailable — assign an action or check AE keymap.',
-          error: error && error.message || 'The active shortcut mapping could not be refreshed.'
-        });
-      });
+    // Pad (pin) actions never reach this path; they use executePin.
+    if (/^pad:/.test(String(actionId || ''))) {
+      return Promise.resolve(resultFor(String(actionId || ''), source, 'Unsupported',
+        'unsupported', {
+          userMessage: 'Edit this pin to repair it.',
+          error: 'Pinned actions must run through executePin.'
+        }));
     }
-
-    return run(0);
+    return refreshForActivation(actionId).then(function () {
+      return executeAction(actionId, source);
+    }).catch(function (error) {
+      if (R.log) R.log.warn('Could not load the active shortcut mapping.', error);
+      return resultFor(actionId, source, 'Unsupported', 'unsupported', {
+        userMessage: 'Mapping unavailable — assign an action or check AE keymap.',
+        error: error && error.message || 'The active shortcut mapping could not be refreshed.'
+      });
+    });
   }
 
   function pinActionForExecution(pin, resolution) {
@@ -883,14 +883,34 @@
     return action;
   }
 
+  function registryReady() {
+    var shortcuts = R.afterEffectsShortcuts;
+    if (!shortcuts) return false;
+    return typeof shortcuts.keymapLoaded !== 'function' || shortcuts.keymapLoaded() === true;
+  }
+
+  // After the host reports a stale keymap, the command has NOT run (the host
+  // rejects the request before executeCommand). We refresh the registry once in
+  // the background and let the user click again. Nothing is re-dispatched.
+  function requestRegistryRefresh(requestId) {
+    var shortcuts = R.afterEffectsShortcuts;
+    if (!shortcuts || typeof shortcuts.refreshActiveKeymap !== 'function') return;
+    Promise.resolve().then(function () {
+      tracePin('Refreshing stale pin mapping', null, requestId, { refreshAttempted: true });
+      return shortcuts.refreshActiveKeymap(true);
+    }).catch(function (error) {
+      if (R.log) R.log.warn('Could not refresh the After Effects shortcut registry.', error);
+    });
+  }
+
   function unavailablePinResult(pinId, pin, source, requestId, reason) {
     var displayName = pin && (pin.displayName || pin.label) || 'Shortcut';
-    var message = 'Couldn’t run "' + displayName + '". Action is unavailable.';
-    var result = resultFor(pin && pin.actionId || '', source, 'Unsupported', 'unsupported', {
+    var message = 'Couldn’t run “' + displayName + '”. Its After Effects command needs repair.';
+    var result = resultFor('', source, 'Unsupported', 'unsupported', {
       ok: false,
       pinId: pinId,
       requestId: requestId,
-      userMessage: message + (reason ? ' ' + reason : ''),
+      userMessage: message,
       error: reason || 'The saved pin action could not be resolved.',
       pinStatus: 'unavailable'
     });
@@ -901,89 +921,33 @@
     return Promise.resolve(result);
   }
 
-  function refreshPinRegistry(pinId, requestId) {
-    var shortcuts = R.afterEffectsShortcuts;
-    if (!shortcuts || typeof shortcuts.refreshActiveKeymap !== 'function') {
-      return Promise.resolve(null);
-    }
-    return Promise.resolve().then(function () {
-      tracePin('Refreshing stale pin mapping', padById(pinId), requestId, {
-        refreshAttempted: true
-      });
-      return shortcuts.refreshActiveKeymap(true);
-    }).then(function () {
-      var pin = padById(pinId);
-      if (!pin) return null;
-      var resolution = R.shortcutPads && R.shortcutPads.resolve
-        ? R.shortcutPads.resolve(pin) : null;
-      var action = pinActionForExecution(pin, resolution);
-      if (!action) {
-        var registryEntries = shortcuts.catalogEntries ? shortcuts.catalogEntries() : [];
-        var registryVersion = shortcuts.registryVersion
-          ? shortcuts.registryVersion() : '';
-        var reason = resolution && resolution.unavailableReason ||
-          'The action did not resolve in the refreshed AE action registry.';
-        if (R.shortcutPads && R.shortcutPads.markUnavailable) {
-          R.shortcutPads.markUnavailable(pinId, reason);
-        }
-        tracePin('Shortcut action unresolved after registry refresh', pin, requestId, {
-          storedActionId: pin.action && pin.action.actionId || pin.actionId || '',
-          storedActionName: pin.action && pin.action.commandName || pin.commandName || '',
-          menuPath: pin.action && pin.action.menuPath || pin.menuPath || '',
-          pinStatus: 'unavailable',
-          registryVersion: registryVersion || pin.registryVersion || '',
-          registrySize: registryEntries.length,
-          refreshAttempted: true,
-          error: reason
-        }, 'warn');
-        return null;
-      }
-      tracePin('Pin resolved after registry refresh', pin, requestId, {
-        commandId: pin.commandId,
-        commandName: pin.commandName,
-        registryVersion: shortcuts.registryVersion
-          ? shortcuts.registryVersion() : ''
-      });
-      return { pin: pin, action: action };
-    }).catch(function (error) {
-      var pin = padById(pinId);
-      tracePin('Shortcut action unresolved after registry refresh', pin, requestId, {
-        storedActionId: pin && (pin.action && pin.action.actionId || pin.actionId) || '',
-        storedActionName: pin && (pin.action && pin.action.commandName || pin.commandName) || '',
-        menuPath: pin && (pin.action && pin.action.menuPath || pin.menuPath) || '',
-        pinStatus: 'unavailable',
-        registryVersion: shortcuts.registryVersion ? shortcuts.registryVersion() : '',
-        registrySize: shortcuts.catalogEntries ? shortcuts.catalogEntries().length : 0,
-        refreshAttempted: true,
-        error: error && error.message || String(error)
-      }, 'warn');
-      return null;
-    });
+  function loadingPinResult(pinId, source, requestId) {
+    return Promise.resolve(resultFor('', source, 'Loading', 'unsupported', {
+      pinId: pinId,
+      requestId: requestId,
+      userMessage: 'After Effects shortcuts are still loading. Try again in a moment.',
+      error: 'The After Effects command registry has not loaded yet.'
+    }));
   }
 
-  function executeResolvedPin(pin, action, source, requestId, refreshAttempted) {
+  function executeResolvedPin(pin, action, source, requestId) {
     var actionId = action.actionId || action.id;
+    var pinId = pin.pinId || pin.id;
     return executeAction(actionId, source, action).then(function (result) {
-      if (staleKeymapResult(result) && !refreshAttempted) {
-        return refreshPinRegistry(pin.pinId || pin.id, requestId).then(function (refreshed) {
-          if (!refreshed) {
-            var reason = result.error || result.userMessage ||
-              'The saved action no longer matches the active AE keymap.';
-            if (R.shortcutPads && R.shortcutPads.markUnavailable) {
-              R.shortcutPads.markUnavailable(pin.pinId || pin.id, reason);
-            }
-            return unavailablePinResult(pin.pinId || pin.id, pin, source, requestId, reason);
-          }
-          return executeResolvedPin(refreshed.pin, refreshed.action, source, requestId, true);
-        });
+      if (staleKeymapResult(result)) {
+        requestRegistryRefresh(requestId);
+        result.state = 'Failed';
+        result.ok = false;
+        result.userMessage = 'After Effects had a newer shortcut map, so nothing ran. ' +
+          'The map was refreshed; click the shortcut again.';
       }
       var durationMs = Math.max(0, Date.now() - source.startedAt);
-      result.pinId = pin.pinId || pin.id;
+      result.pinId = pinId;
       result.requestId = requestId;
       result.durationMs = durationMs;
       if (result.state === 'Ready' && !result.verified && !result.userMessage) {
-        result.userMessage = 'After Effects did not confirm "' +
-          (pin.displayName || pin.label || 'Shortcut') + '". Check its target and context.';
+        result.userMessage = 'After Effects did not confirm “' +
+          (pin.displayName || pin.label || 'Shortcut') + '”. Check its target and context.';
       }
       if (result.state === 'Failed' || result.state === 'Unsupported' || result.error) {
         result.pinStatus = 'unavailable';
@@ -1007,10 +971,10 @@
       var durationMs = Math.max(0, Date.now() - source.startedAt);
       var message = error && error.message || 'The action could not be run.';
       var result = resultFor(actionId, source, 'Failed', selectRoute(action), {
-        pinId: pin.pinId || pin.id,
+        pinId: pinId,
         requestId: requestId,
         durationMs: durationMs,
-        userMessage: 'Couldn’t run "' + (pin.displayName || pin.label || 'Shortcut') + '".',
+        userMessage: 'Couldn’t run “' + (pin.displayName || pin.label || 'Shortcut') + '”.',
         error: message
       });
       tracePin('AE execution failed', pin, requestId, {
@@ -1021,6 +985,26 @@
     });
   }
 
+  // Development-only structured record of one pin activation.
+  function logPinExecution(source, result) {
+    var completedAt = Date.now();
+    var pin = padById(source.pinId);
+    var execution = result && result.result || {};
+    tracePin('Shortcut execution completed', pin, source.requestId, {
+      requestId: source.requestId,
+      pinId: source.pinId,
+      commandId: execution.commandId || (pin && pin.commandId) || null,
+      commandName: execution.commandName || (pin && pin.commandName) || '',
+      startedAt: new Date(source.startedAt).toISOString(),
+      completedAt: new Date(completedAt).toISOString(),
+      durationMs: Math.max(0, completedAt - source.startedAt),
+      ok: !!(result && result.ok),
+      error: result && result.error || ''
+    }, result && result.ok ? 'debug' : 'warn');
+  }
+
+  // Canonical Shortcut Pad execution. One activation = one request ID = at most
+  // one bridge dispatch. Never retries, never writes settings, never searches.
   function executePin(pinId, inputSource) {
     var requestId = createRequestId();
     var source = sourceFor(inputSource || {
@@ -1069,10 +1053,11 @@
 
     function finish(result) {
       delete PIN_RUNNING[source.pinId];
+      logPinExecution(source, result);
       return result;
     }
 
-    function resolveAndRun(allowRefresh) {
+    function resolveAndRun() {
       var pin = padById(source.pinId);
       if (!pin) {
         tracePin('Pin not found', null, requestId, {
@@ -1087,11 +1072,15 @@
         }));
       }
       tracePin('Pin resolved', pin, requestId, {
-        actionId: pin.action && pin.action.actionId || pin.actionId || '',
-        commandId: pin.action && pin.action.commandId || pin.commandId,
-        commandName: pin.action && pin.action.commandName || pin.commandName || '',
-        registryVersion: pin.action && pin.action.registryVersion || pin.registryVersion || ''
+        commandId: pin.commandId,
+        commandName: pin.commandName || '',
+        registryVersion: pin.registryVersion || ''
       });
+      // Resolution depends on the loaded registry. Before it loads, a pin is
+      // "loading", never "broken", and nothing is marked or refreshed.
+      if (pin.enabled !== true && !registryReady()) {
+        return loadingPinResult(source.pinId, source, requestId);
+      }
       if (pin.enabled !== true || pin.status === 'unavailable') {
         return unavailablePinResult(source.pinId, pin, source, requestId,
           pin.unavailableReason || 'Edit this pin to repair its action.');
@@ -1100,19 +1089,10 @@
         ? R.shortcutPads.resolve(pin) : null;
       var action = pinActionForExecution(pin, resolution);
       if (!action) {
-        if (allowRefresh && R.afterEffectsShortcuts &&
-            R.afterEffectsShortcuts.refreshActiveKeymap) {
-          return refreshPinRegistry(source.pinId, requestId).then(function (refreshed) {
-            return refreshed
-              ? executeResolvedPin(refreshed.pin, refreshed.action, source, requestId, true)
-              : unavailablePinResult(source.pinId, padById(source.pinId) || pin,
-                source, requestId, 'The action could not be resolved in the current AE registry.');
-          });
-        }
         return unavailablePinResult(source.pinId, pin, source, requestId,
           resolution && resolution.unavailableReason || 'Edit this pin to repair its action.');
       }
-      return executeResolvedPin(pin, action, source, requestId, false);
+      return executeResolvedPin(pin, action, source, requestId);
     }
 
     return Promise.resolve().then(function () {
@@ -1125,7 +1105,7 @@
           error: 'Shortcut capture is active.'
         });
       }
-      return resolveAndRun(true);
+      return resolveAndRun();
     }).then(finish, function (error) {
       var pin = padById(source.pinId);
       var durationMs = Math.max(0, Date.now() - source.startedAt);
@@ -1138,7 +1118,7 @@
         pinId: source.pinId,
         requestId: requestId,
         durationMs: durationMs,
-        userMessage: 'Couldn’t run "' + (pin && (pin.displayName || pin.label) || 'Shortcut') + '".',
+        userMessage: 'Couldn’t run “' + (pin && (pin.displayName || pin.label) || 'Shortcut') + '”.',
         error: message
       }));
     });
