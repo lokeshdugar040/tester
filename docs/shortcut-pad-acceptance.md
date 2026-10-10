@@ -24,9 +24,9 @@ Branch: `arena/ae1c2dd0-tester` (base `6d05c8b`).
 
 | Pin | Action ID | commandActionId | commandId | Source |
 | --- | --- | --- | --- | --- |
-| Undo | `ae.map.CSwitchboard.Undo` | `ae-undo` | 2371 | verified host probe (`docs/SHORTCUT-COMMANDS.md`) |
+| Undo | `ae.map.CSwitchboard.Undo` | `ae-undo` | _not routed_ | **unavailable**: no reliable automation route (superseded; 2371 is not used) |
 | Redo | `ae.app.redo` (test fixture) | `ae-redo` | 2372 | **fixture value**; live ID comes from the host probe |
-| Duplicate | `ae.layer.duplicate` (test fixture) | `ae-duplicate` | 2400 | **fixture value**; live ID comes from the host probe |
+| Duplicate | `ae.layer.duplicate` | `ae-duplicate` | live probe | verified by user test (Duplicate 5 → 6); re-run probe to confirm the ID |
 | Easy Ease | `ae.keyframes.easy-ease` (test fixture) | `ae-easy-ease` | 2500 | **fixture value**; live ID comes from the host probe |
 
 Action-to-command mapping (`ACTION_METADATA` in `ae-shortcut-map.js`) is verified against `commandActionId`. The numeric IDs in the table are not confirmed against a running After Effects instance.
